@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>กฎของเคอร์ชอฟฟ์ - Interactive Physics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --panel-bg: rgba(30, 35, 46, 0.85);
+            --wire-color: #1f2937;
+            --pipe-color: #2d3748;
+            --voltage-color: #ff3366; 
+            --resistance-color: #00e5ff; 
+            --current-color: #ffcc00; 
+            --water-color: #3b82f6;
+            --text-light: #f0f6fc;
+            --text-muted: #8b949e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Prompt', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            background-image: radial-gradient(circle at 50% 40%, #151823 0%, var(--bg-color) 80%);
+        }
+
+        /* --- Navigation & App Layout --- */
+        .page {
+            display: none; 
+            flex-direction: column;
+            flex: 1;
+            width: 100%;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .page.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            z-index: 50;
+        }
+
+        .nav-btn {
+            background: var(--panel-bg);
+            color: var(--text-light);
+            border: 2px solid #30363d;
+            padding: 10px 25px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: #30363d;
+            transform: scale(1.05);
+        }
+        
+        .nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .nav-btn.glow {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            border-color: #10b981;
+            color: #10b981;
+            animation: pulse-btn 1.5s infinite;
+        }
+        
+        .nav-btn.action-btn {
+            background: rgba(255, 204, 0, 0.2);
+            border-color: var(--current-color);
+            color: var(--current-color);
+            font-size: 1.2rem;
+            padding: 15px 30px;
+        }
+        .nav-btn.action-btn:hover {
+            background: var(--current-color);
+            color: #000;
+        }
+
+        @keyframes pulse-btn {
+            0%, 100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.8); }
+        }
+
+        /* --- Scenario Navigation --- */
+        .scenario-nav {
+            display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 5px; margin-bottom: 5px;
+        }
+        
+        .scen-btn {
+            background: rgba(255,255,255,0.1); border: none; color: white;
+            border-radius: 50%; width: 35px; height: 35px; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.2rem; transition: all 0.2s;
+        }
+        .scen-btn:hover:not(:disabled) { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+        .scen-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+        /* --- Progress Dots Indicator --- */
+        .progress-indicator { display: flex; gap: 10px; align-items: center; }
+
+        .dot {
+            width: 35px; height: 35px; border-radius: 50%; border: 2px solid #30363d;
+            background: rgba(0,0,0,0.2); color: var(--text-muted);
+            display: flex; justify-content: center; align-items: center;
+            font-weight: 800; font-size: 1rem; transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            border-color: var(--current-color); color: var(--text-light);
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.2); transform: scale(1.1);
+        }
+
+        .dot.completed { background: #10b981; border-color: #10b981; color: white; }
+        .dot.active.completed { border-color: white; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+
+        header { text-align: center; padding: 10px 20px 0px; z-index: 10; }
+
+        h1 { font-weight: 800; font-size: 2.2rem; letter-spacing: 1px; margin-bottom: 5px; }
+
+        .title-badge {
+            background: linear-gradient(90deg, rgba(255,204,0,0.1), rgba(255,51,102,0.1));
+            color: #fff; display: inline-block; padding: 8px 25px; border-radius: 20px;
+            font-size: 1.4rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin: 0;
+            margin-top: 10px;
+        }
+
+        /* --- Mission UI --- */
+        .mission-box {
+            background: rgba(255, 255, 255, 0.05); border: 2px solid #30363d;
+            color: var(--text-light); border-radius: 30px;
+            display: inline-flex; flex-direction: column; align-items: center;
+            gap: 15px; margin-top: 15px; font-weight: 600;
+            width: 90%; max-width: 800px; padding: 25px;
+        }
+
+        /* --- Toast Notification (Pop-up) --- */
+        .toast {
+            position: fixed; top: 30px; left: 50%; transform: translate(-50%, -150%);
+            background: var(--panel-bg); backdrop-filter: blur(15px);
+            padding: 15px 35px; border-radius: 30px; font-size: 1.3rem; font-weight: 800;
+            z-index: 1000; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;
+        }
+        .toast.show { transform: translate(-50%, 0); }
+        .toast.success { color: #10b981; border: 2px solid #10b981; box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3); }
+        .toast.error { color: var(--voltage-color); border: 2px solid var(--voltage-color); box-shadow: 0 10px 30px rgba(255, 51, 102, 0.3); }
+
+        .draggables { display: flex; gap: 15px; justify-content: center; }
+
+        .drag-item {
+            width: 55px; height: 55px; border-radius: 15px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2rem; font-weight: 800; cursor: grab;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4); transition: all 0.2s; user-select: none;
+        }
+        
+        .drag-item:active { cursor: grabbing; transform: scale(0.9); }
+        .drag-item.selected { outline: 4px solid white; outline-offset: 2px; transform: scale(1.1); }
+        
+        .bg-v { background: var(--voltage-color); color: white; }
+        .bg-i { background: var(--current-color); color: #000; }
+        .bg-r { background: var(--resistance-color); color: #000; }
+
+        .equation-builder {
+            display: flex; gap: 12px; align-items: center; font-size: 2.2rem; font-weight: bold;
+            background: rgba(0,0,0,0.3); padding: 15px 25px; border-radius: 20px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .drop-zone {
+            width: 60px; height: 60px; border: 3px dashed rgba(255,255,255,0.4); border-radius: 16px; background: rgba(0,0,0,0.2);
+            display: flex; justify-content: center; align-items: center; transition: all 0.3s; cursor: pointer; font-size: 2rem; font-weight: 800;
+        }
+        
+        .drop-zone.filled { border: 3px solid transparent; cursor: default; background-clip: padding-box; }
+        .drop-zone.error { animation: shake 0.3s; background: rgba(255,0,0,0.3); }
+
+        /* Graphic Area */
+        .graphic-container {
+            flex: 1; display: flex; justify-content: center; align-items: center;
+            position: relative; padding: 20px; z-index: 1; min-height: 250px;
+        }
+        svg { width: 100%; max-width: 700px; max-height: 35vh; overflow: visible; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
+
+        /* Highlight Box Animation & Interactive styles */
+        .highlight-box {
+            fill: var(--bg-color); 
+            stroke-width: 3;
+            stroke-dasharray: 8 6;
+            animation: border-dance 1.5s linear infinite;
+            transition: fill 0.3s ease;
+        }
+        @keyframes border-dance {
+            to { stroke-dashoffset: -28; }
+        }
+        
+        .hover-scale { 
+            cursor: pointer; 
+            transition: filter 0.2s ease;
+        }
+        .hover-scale text, .hover-scale polygon, .hover-scale line, .hover-scale polyline { pointer-events: none; }
+        .hover-scale rect, .hover-scale circle.click-area { pointer-events: all; }
+        
+        .hover-scale:hover { 
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.7)) brightness(1.2); 
+        }
+        
+        .solved-box { stroke-dasharray: none; animation: none; fill: rgba(16, 185, 129, 0.15) !important; stroke: #10b981 !important; }
+        .solved-text { color: #10b981 !important; fill: #10b981 !important; }
+
+        /* Controls Area (Bottom) */
+        .controls {
+            background-color: var(--panel-bg); backdrop-filter: blur(20px); padding: 25px 30px 30px;
+            border-top-left-radius: 40px; border-top-right-radius: 40px;
+            display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap;
+            box-shadow: 0 -15px 50px rgba(0,0,0,0.6); gap: 20px; z-index: 20; position: relative; margin-top: auto; transition: all 0.5s;
+        }
+
+        .controls.locked { opacity: 0.3; pointer-events: none; filter: grayscale(80%); }
+
+        .control-group { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 150px; max-width: 300px; }
+        .control-label { font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; text-transform: uppercase; text-align: center; }
+        .val-display { font-size: 2.5rem; font-weight: 800; margin-bottom: 15px; text-shadow: 0 0 20px rgba(255,255,255,0.2); font-variant-numeric: tabular-nums; }
+
+        /* Custom Sliders */
+        input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; z-index: 30; position: relative; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 14px; cursor: pointer; background: #2d3748; border-radius: 20px; }
+        input[type=range]::-webkit-slider-thumb {
+            height: 36px; width: 36px; border-radius: 50%; background: #ffffff; cursor: pointer;
+            -webkit-appearance: none; margin-top: -11px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        .slider-wrapper { display: flex; align-items: center; width: 100%; gap: 10px; margin-top: 5px; }
+        .adjust-btn {
+            background: rgba(255,255,255,0.1); border: none; color: var(--text-light);
+            width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem;
+            cursor: pointer; display: flex; justify-content: center; align-items: center;
+            transition: all 0.2s; flex-shrink: 0;
+        }
+        .adjust-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.1); }
+        .adjust-btn:active { transform: scale(0.9); }
+
+        /* Specific Colors & Track styles */
+        .color-v { color: var(--voltage-color); }
+        .color-r { color: var(--resistance-color); }
+        .color-i { color: var(--current-color); }
+        .color-in { color: #10b981; } 
+        .color-out1 { color: #f59e0b; } 
+        .color-out2 { color: #ef4444; } 
+        .color-out3 { color: #a855f7; }
+
+        #i-slider-1::-webkit-slider-runnable-track, #p2-i-slider::-webkit-slider-runnable-track { background: linear-gradient(90deg, #5c4c01, var(--current-color)); }
+        #r-slider-1::-webkit-slider-runnable-track { background: linear-gradient(90deg, #09343a, var(--resistance-color)); }
+        
+        /* Dynamic KCL & KVL sliders */
+        .slider-in::-webkit-slider-runnable-track { background: linear-gradient(90deg, #064e3b, #10b981) !important; }
+        .slider-out-0::-webkit-slider-runnable-track { background: linear-gradient(90deg, #78350f, #f59e0b) !important; }
+        .slider-out-1::-webkit-slider-runnable-track { background: linear-gradient(90deg, #7f1d1d, #ef4444) !important; }
+        .slider-out-2::-webkit-slider-runnable-track { background: linear-gradient(90deg, #4c1d95, #a855f7) !important; }
+
+        .result-board {
+            background: rgba(255, 255, 255, 0.05); border: 3px solid currentColor;
+            border-radius: 30px; padding: 15px; transform: translateY(-5px);
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+        .result-board.success { background: rgba(16, 185, 129, 0.1); border-color: #10b981; color: #10b981; }
+        .result-board.error { background: rgba(255, 51, 102, 0.1); border-color: var(--voltage-color); color: var(--voltage-color); }
+        
+        .result-board .val-display { margin-bottom: 0; }
+        .readonly-board { opacity: 0.8; }
+
+        /* KCL/KVL Layout Specific (Compact) */
+        .kcl-controls-layout { display: flex; width: 100%; justify-content: center; align-items: stretch; gap: 15px; }
+        .kcl-column { flex: 1; display: flex; flex-direction: column; gap: 5px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 20px; }
+        .kcl-divider { display: flex; align-items: center; font-size: 2.5rem; color: var(--text-muted); padding: 0 5px; }
+        .kcl-col-header { text-align: center; font-size: 1rem; font-weight: 800; margin-bottom: 5px; border-bottom: 2px dashed rgba(255,255,255,0.2); padding-bottom: 5px; }
+        .kcl-compact-slider .control-label { font-size: 0.85rem; margin-bottom: 0; }
+        .kcl-compact-slider .val-display { font-size: 1.5rem; margin-bottom: 5px; }
+        .kcl-compact-slider input[type=range] { height: 10px; }
+        .kcl-compact-slider input[type=range]::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -7px; }
+
+        /* Floating Popover */
+        .popover {
+            position: fixed; display: none; flex-direction: column; gap: 10px;
+            background: rgba(30, 35, 46, 0.98); backdrop-filter: blur(20px);
+            border: 2px solid #4b5563; border-radius: 20px; padding: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8); z-index: 1000;
+            transform: translate(-50%, -100%); margin-top: -20px;
+            min-width: 260px;
+            animation: popUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes popUp {
+            from { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+            to { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+        }
+        .popover::after {
+            content: ''; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
+            border-width: 10px 10px 0; border-style: solid; border-color: #4b5563 transparent transparent transparent;
+        }
+
+        /* Animations */
+        .electrons { stroke-dasharray: 12 24; animation: flow-el linear infinite; }
+        .electrons.paused { animation-play-state: paused; opacity: 0.3; }
+        @keyframes flow-el { from { stroke-dashoffset: 72; } to { stroke-dashoffset: 0; } }
+
+        .water-flow { stroke-dasharray: 15 30; animation: flow-water linear infinite; }
+        @keyframes flow-water { from { stroke-dashoffset: 90; } to { stroke-dashoffset: 0; } }
+
+        .bulb-glow { transition: all 0.3s ease; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .controls { padding: 20px; border-radius: 30px 30px 0 0; }
+            .kcl-controls-layout { flex-direction: column; }
+            .kcl-divider { transform: rotate(90deg); margin: -10px 0; }
+            .result-board { transform: none; width: 100%; margin: 10px 0; }
+            .control-group { width: 100%; max-width: none; }
+            .top-nav { padding: 15px 20px; }
+            .equation-builder { font-size: 1.5rem; padding: 10px 15px; }
+            .drop-zone { width: 45px; height: 45px; font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Global Toast Notification -->
+    <div id="toast" class="toast">ข้อความแจ้งเตือน</div>
+
+    <!-- Floating Interactive Popover (Page 4) -->
+    <div id="p4-popover" class="popover">
+        <button class="adjust-btn" style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; font-size: 0.8rem; background: rgba(255,255,255,0.2);" onclick="closeP4Popover()">✕</button>
+        <div id="p4-pop-title" style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; text-align: center; margin-bottom: 5px;">ปรับค่าตัวแปรกระแส (I)</div>
+        <div id="p4-pop-content" style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+            <!-- Injected by JS -->
+        </div>
+        <button class="nav-btn action-btn glow" style="margin-top: 10px; font-size: 1rem; padding: 8px 15px;" onclick="checkP4Popover()">ตรวจคำตอบ</button>
+    </div>
+
+    <!-- Floating Interactive Popover (Page 6 - KVL Practice) -->
+    <div id="p6-popover" class="popover">
+        <button class="adjust-btn" style="position: absolute; top: 10px; right: 10px; width: 24px; height: 24px; font-size: 0.8rem; background: rgba(255,255,255,0.2);" onclick="closeP6Popover()">✕</button>
+        <div id="p6-pop-title" style="font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; text-align: center; margin-bottom: 10px;">ระบุแรงดันตกคร่อม (V)</div>
+        <div id="p6-pop-content" style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+            <div class="val-display" id="p6-pop-val" style="text-align:center; font-size:2.5rem; margin-bottom:5px; font-weight:bold;">0.0 V</div>
+            <div class="slider-wrapper" style="margin-bottom:10px;">
+                <button class="adjust-btn" onclick="adjustP6Pop(-0.5)">-</button>
+                <input type="range" id="p6-pop-slider" min="0" max="24" step="0.5" value="0" oninput="updateP6Pop()">
+                <button class="adjust-btn" onclick="adjustP6Pop(0.5)">+</button>
+            </div>
+        </div>
+        <button class="nav-btn action-btn glow" style="margin-top: 5px; font-size: 1rem; padding: 8px 15px;" onclick="checkP6Popover()">ตรวจคำตอบ</button>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <div class="top-nav">
+        <button class="nav-btn" id="btn-prev" onclick="changeGlobalPage(-1)" disabled>← ก่อนหน้า</button>
+        <div class="progress-indicator" id="progress-dots">
+            <div class="dot active" id="dot-1">1</div>
+            <div class="dot" id="dot-2">2</div>
+            <div class="dot" id="dot-3">3</div>
+            <div class="dot" id="dot-4">4</div>
+            <div class="dot" id="dot-5">5</div>
+            <div class="dot" id="dot-6">6</div>
+        </div>
+        <button class="nav-btn" id="btn-next" onclick="changeGlobalPage(1)" disabled>หน้าถัดไป →</button>
+    </div>
+
+    <!-- ================= PAGE 1: Ohm's Law (1 Scenario) ================= -->
+    <div id="page-1" class="page active">
+        <header>
+            <h1>กฎของโอม (Ohm's Law)</h1>
+            <p class="title-badge" style="margin-top: 5px;">ทบทวนสมการแรงดันไฟฟ้า (V)</p>
+            
+            <div class="mission-box" style="display: flex; align-items: center; justify-content: center; max-width: 900px; margin: 15px auto;">
+                <div style="font-size: 1.3rem; text-align: center; margin-bottom: 10px;">คำสั่ง: ลากตัวแปร <b>V, I, R</b> ไปจัดเรียงในสมการให้ถูกต้อง</div>
+                
+                <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; width: 100%;">
+                    <!-- ซ้าย: ตัวแปร -->
+                    <div class="draggables" style="background: rgba(255,255,255,0.05); padding: 15px 25px; border-radius: 20px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);">
+                        <div class="drag-item bg-v" draggable="true" ondragstart="dragStart(event, 'V')" onclick="selectItem(this, 'V')" data-type="V">V</div>
+                        <div class="drag-item bg-i" draggable="true" ondragstart="dragStart(event, 'I')" onclick="selectItem(this, 'I')" data-type="I">I</div>
+                        <div class="drag-item bg-r" draggable="true" ondragstart="dragStart(event, 'R')" onclick="selectItem(this, 'R')" data-type="R">R</div>
+                    </div>
+                    <!-- ลูกศรชี้ -->
+                    <div style="font-size: 2.5rem; color: rgba(255,255,255,0.3);">➔</div>
+                    <!-- ขวา: สมการ -->
+                    <div class="equation-builder" style="margin: 0; background: rgba(255,255,255,0.05); padding: 15px 25px; border-radius: 20px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);">
+                        <div class="drop-zone" data-expected="V" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                        <span style="margin:0 10px;">=</span>
+                        <div class="drop-zone" data-expected="I,R" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                        <span style="margin:0 10px;">×</span>
+                        <div class="drop-zone" data-expected="I,R" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="graphic-container">
+            <svg viewBox="0 0 500 350">
+                <defs><clipPath id="battery-clip"><rect x="35" y="125" width="60" height="100" rx="12"/></clipPath></defs>
+                <rect id="battery-glow" x="25" y="115" width="80" height="120" rx="20" fill="var(--voltage-color)" opacity="0.3" filter="blur(20px)"/>
+                <rect x="65" y="65" width="370" height="220" rx="40" fill="none" stroke="var(--wire-color)" stroke-width="24" stroke-linecap="round"/>
+                <rect id="electron-path" class="electrons" x="65" y="65" width="370" height="220" rx="40" fill="none" stroke="var(--current-color)" stroke-width="12" stroke-linecap="round"/>
+                
+                <g>
+                    <rect x="35" y="125" width="60" height="100" rx="12" fill="#161b22" stroke="var(--voltage-color)" stroke-width="6"/>
+                    <rect id="battery-fill" x="35" y="175" width="60" height="50" fill="var(--voltage-color)" clip-path="url(#battery-clip)"/>
+                    <text x="65" y="153" fill="white" font-size="28" font-weight="800" text-anchor="middle" dominant-baseline="middle">+</text>
+                    <text x="65" y="200" fill="white" font-size="40" font-weight="800" text-anchor="middle" dominant-baseline="middle">-</text>
+                </g>
+                <g>
+                    <circle id="bulb-light" class="bulb-glow" cx="435" cy="175" r="60" fill="var(--current-color)" opacity="0.5" filter="blur(15px)"/>
+                    <circle x="435" y="175" cx="435" cy="175" r="45" fill="#161b22" stroke="var(--resistance-color)" stroke-width="8"/>
+                    <path d="M 415 175 L 425 150 L 445 200 L 455 175" fill="none" stroke="var(--resistance-color)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+
+                <text id="svg-v-val" x="65" y="260" fill="var(--voltage-color)" font-size="22" font-weight="bold" text-anchor="middle">10.0 V</text>
+                <text id="svg-i-val" x="250" y="40" fill="var(--current-color)" font-size="22" font-weight="bold" text-anchor="middle">2.0 A</text>
+                <text id="svg-r-val" x="435" y="260" fill="var(--resistance-color)" font-size="22" font-weight="bold" text-anchor="middle">5.0 Ω</text>
+            </svg>
+        </div>
+
+        <div id="controls-scen-1" class="controls locked" style="display:flex;">
+            <div class="control-group color-i">
+                <div class="control-label">กระแส (I)</div>
+                <div class="val-display" id="i-val-1">2.0 A</div>
+                <div class="slider-wrapper">
+                    <button class="adjust-btn" onclick="adjustValue('i-slider-1', -0.5)">-</button>
+                    <input type="range" id="i-slider-1" min="0.5" max="10" step="0.5" value="2" oninput="updateScenarioPhysics()">
+                    <button class="adjust-btn" onclick="adjustValue('i-slider-1', 0.5)">+</button>
+                </div>
+            </div>
+            <div class="control-group color-r">
+                <div class="control-label">ความต้านทาน (R)</div>
+                <div class="val-display" id="r-val-1">5.0 Ω</div>
+                <div class="slider-wrapper">
+                    <button class="adjust-btn" onclick="adjustValue('r-slider-1', -1)">-</button>
+                    <input type="range" id="r-slider-1" min="1" max="20" step="1" value="5" oninput="updateScenarioPhysics()">
+                    <button class="adjust-btn" onclick="adjustValue('r-slider-1', 1)">+</button>
+                </div>
+            </div>
+            <div class="control-group result-board color-v">
+                <div class="control-label">แรงดัน (V)</div>
+                <div class="val-display" id="v-val-1">10.0 V</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= PAGE 2: Unsolvable Circuit ================= -->
+    <div id="page-2" class="page">
+        <header>
+            <h1>ข้อจำกัดของกฎของโอม</h1>
+            <p class="title-badge">โจทย์ทบทวน: เมื่อ V=IR คำนวณไม่ได้</p>
+            <div class="mission-box" style="padding: 15px 30px;">
+                <div style="text-align: center; font-size: 1.3rem;">คำสั่ง: ลองกำหนดค่า <b class="color-i" style="font-size: 1.6rem;">I ตรงกลาง</b> ของวงจร 2 ลูปนี้ดู</div>
+            </div>
+        </header>
+
+        <div class="graphic-container">
+            <svg id="p2-svg-unsolvable" viewBox="0 0 500 350">
+                <path d="M 65 65 L 435 65 L 435 285 L 65 285 Z" fill="none" stroke="var(--wire-color)" stroke-width="24" stroke-linejoin="round"/>
+                <path d="M 250 65 L 250 285" fill="none" stroke="var(--wire-color)" stroke-width="24" stroke-linejoin="round"/>
+                <path id="p2-el-a" class="electrons paused" d="M 65 285 L 65 65 L 250 65 L 250 285 Z" fill="none" stroke="var(--current-color)" stroke-width="12" stroke-linejoin="round"/>
+                <path id="p2-el-b" class="electrons paused" d="M 435 125 L 435 65 L 250 65 L 250 285 L 435 285 L 435 225" fill="none" stroke="var(--current-color)" stroke-width="12" stroke-linejoin="round"/>
+                
+                <g>
+                    <rect x="35" y="125" width="60" height="100" rx="12" fill="#161b22" stroke="var(--voltage-color)" stroke-width="6"/>
+                    <rect x="35" y="125" width="60" height="100" fill="var(--voltage-color)" opacity="0.8"/>
+                    <text x="65" y="153" fill="white" font-size="28" font-weight="800" text-anchor="middle" dominant-baseline="middle">+</text>
+                    <text x="65" y="200" fill="white" font-size="40" font-weight="800" text-anchor="middle" dominant-baseline="middle">-</text>
+                    <text x="65" y="260" fill="var(--voltage-color)" font-size="20" font-weight="bold" text-anchor="middle">12 V</text>
+                </g>
+                <g>
+                    <rect x="405" y="125" width="60" height="100" rx="12" fill="#161b22" stroke="var(--voltage-color)" stroke-width="6"/>
+                    <rect x="405" y="125" width="60" height="100" fill="var(--voltage-color)" opacity="0.6"/>
+                    <text x="435" y="153" fill="white" font-size="28" font-weight="800" text-anchor="middle" dominant-baseline="middle">+</text>
+                    <text x="435" y="200" fill="white" font-size="40" font-weight="800" text-anchor="middle" dominant-baseline="middle">-</text>
+                    <text x="435" y="260" fill="var(--voltage-color)" font-size="20" font-weight="bold" text-anchor="middle">9 V</text>
+                </g>
+                <g>
+                    <circle x="250" y="175" cx="250" cy="175" r="35" fill="#161b22" stroke="var(--resistance-color)" stroke-width="6"/>
+                    <path d="M 250 155 L 235 160 L 265 175 L 235 190 L 250 195" fill="none" stroke="var(--resistance-color)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <text x="310" y="180" fill="var(--resistance-color)" font-size="18" font-weight="bold" text-anchor="middle">R=5Ω</text>
+                </g>
+                
+                <!-- Disable hover-scale for old page 2 to prevent jittering -->
+                <g transform="translate(250, 110)">
+                    <rect x="-85" y="-22" width="170" height="40" rx="10" fill="var(--bg-color)" stroke="var(--current-color)" stroke-width="3"/>
+                    <text id="p2-ix-text" x="0" y="5" fill="var(--current-color)" font-size="22" font-weight="800" text-anchor="middle">I ตรงกลาง = ? A</text>
+                </g>
+            </svg>
+        </div>
+
+        <div class="controls">
+            <div class="control-group color-i">
+                <div class="control-label">ทายค่า I ตรงกลาง (A)</div>
+                <div class="val-display" id="p2-i-val">5.0 A</div>
+                <div class="slider-wrapper">
+                    <button class="adjust-btn" onclick="adjustValue('p2-i-slider', -0.5)">-</button>
+                    <input type="range" id="p2-i-slider" min="0" max="10" step="0.5" value="5" oninput="updatePage2Display()">
+                    <button class="adjust-btn" onclick="adjustValue('p2-i-slider', 0.5)">+</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <button class="nav-btn action-btn glow" onclick="testPage2()">⚡ ทดสอบวงจร</button>
+            </div>
+            <div class="control-group result-board color-i" id="p2-result-board">
+                <div class="control-label">ความถูกต้อง</div>
+                <div class="val-display" id="p2-measured-val">?.?</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= PAGE 3: KCL (Junction Rule) ================= -->
+    <div id="page-3" class="page">
+        <header>
+            <h1>KIRCHHOFF'S LAW 1 : CURRENT LAW</h1>
+            <p class="subtitle">ผลรวมของกระแสที่ไหลเข้าทางแยก = กระแสที่ไหลออก</p>
+            
+            <div class="equation-display" style="margin-top: 10px; font-size: 1.5rem; display: inline-block;">
+                <span class="color-in">Σ I<sub>เข้า</sub></span> <span style="color:white">=</span> <span class="color-out1">Σ I<sub>ออก</sub></span>
+                <br>
+                <div id="kcl-eq-calc" style="font-size: 1.2rem; color: var(--text-light); font-weight: 600; margin-top: 5px;"></div>
+            </div>
+
+            <div class="kcl-config" style="display: flex; justify-content: center; gap: 30px; margin-top: 15px;">
+                <div style="background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);">
+                    <span class="color-in" style="font-weight:bold; margin-right: 10px;">จำนวนท่อไหลเข้า</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKCLCount('in', -1)">-</button>
+                    <span id="in-count-disp" style="margin: 0 10px; font-size: 1.3rem; font-weight: bold; width: 20px; display: inline-block;">1</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKCLCount('in', 1)">+</button>
+                </div>
+                <div style="background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);">
+                    <span class="color-out1" style="font-weight:bold; margin-right: 10px;">จำนวนท่อไหลออก</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKCLCount('out', -1)">-</button>
+                    <span id="out-count-disp" style="margin: 0 10px; font-size: 1.3rem; font-weight: bold; width: 20px; display: inline-block;">1</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKCLCount('out', 1)">+</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="graphic-container">
+            <svg id="kcl-svg" viewBox="0 0 500 350">
+                <!-- Dynamically Generated by JS -->
+            </svg>
+        </div>
+
+        <div class="controls kcl-compact-slider" id="kcl-controls" style="padding-top: 15px;">
+            <!-- Dynamically Generated by JS inside a Flex Layout -->
+        </div>
+    </div>
+
+    <!-- ================= PAGE 4: KCL Practice ================= -->
+    <div id="page-4" class="page">
+        <header>
+            <div class="scenario-nav">
+                <button id="p4-prev" class="scen-btn" onclick="navP4(-1)" disabled>◀</button>
+                <p class="title-badge" id="p4-scenario-title">โจทย์ฝึกฝน 1/4: การหากระแสในจุดแยก (Node P)</p>
+                <button id="p4-next" class="scen-btn" onclick="navP4(1)" disabled>▶</button>
+            </div>
+            <div class="mission-box" style="padding: 15px 30px;">
+                <div id="p4-question" style="text-align: center; font-size: 1.3rem; margin-bottom: 5px;">คำสั่ง: ...</div>
+                <button id="p4-next-btn-large" class="nav-btn glow action-btn" style="display: none; margin-top: 10px; font-size: 1.1rem; padding: 10px 30px;" onclick="navP4(1)">ทำข้อต่อไป ➔</button>
+            </div>
+        </header>
+
+        <div class="graphic-container" style="position: relative;">
+            
+            <!-- P4 SVG 1: Node P -->
+            <svg id="p4-svg-1" viewBox="0 0 500 350" style="display:block; max-width: 850px; max-height: 50vh;">
+                <line x1="80" y1="175" x2="420" y2="175" stroke="var(--wire-color)" stroke-width="16" stroke-linecap="round"/>
+                <line x1="250" y1="30" x2="250" y2="320" stroke="var(--wire-color)" stroke-width="16" stroke-linecap="round"/>
+                
+                <circle cx="250" cy="175" r="15" fill="var(--current-color)"/>
+                <text x="215" y="160" fill="var(--text-light)" font-size="28" font-weight="bold">P</text>
+
+                <text x="140" y="140" fill="var(--text-light)" font-size="24" font-weight="bold">3.0 A</text>
+                <polygon points="150,165 180,175 150,185" fill="var(--text-light)"/>
+
+                <text x="360" y="140" fill="var(--text-light)" font-size="24" font-weight="bold">2.5 A</text>
+                <polygon points="350,165 320,175 350,185" fill="var(--text-light)"/>
+
+                <text x="280" y="270" fill="var(--text-light)" font-size="24" font-weight="bold">7.0 A</text>
+                <polygon points="235,240 250,270 265,240" fill="var(--text-light)"/>
+
+                <text x="160" y="85" fill="var(--current-color)" font-size="22" font-weight="bold">wire X</text>
+                
+                <g transform="translate(340, 100)" class="hover-scale" onclick="openP4Popover(evt, 'ix')" style="color: var(--current-color)">
+                    <rect id="p4-box-ix" class="click-area highlight-box" x="-55" y="-18" width="110" height="36" rx="8" stroke="currentColor" fill="transparent"/>
+                    <text id="p4-ix-text" x="12" y="6" fill="currentColor" font-size="18" font-weight="bold" text-anchor="middle">I = ? A</text>
+                    <text id="p4-arrow-ix" x="-32" y="8" fill="currentColor" font-size="22" font-weight="bold" text-anchor="middle">⬇</text>
+                </g>
+                <g id="p4-wire-x-arrow" fill="var(--current-color)">
+                    <polygon points="235,120 250,90 265,120" id="p4-arrow-poly"/>
+                </g>
+            </svg>
+
+            <!-- P4 SVG 2: Series Circuit -->
+            <svg id="p4-svg-2" viewBox="0 0 500 350" style="display:none; max-width: 850px; max-height: 50vh;">
+                <path d="M 100 100 L 400 100 L 400 250 L 100 250 Z" fill="none" stroke="var(--wire-color)" stroke-width="16" stroke-linejoin="round"/>
+                
+                <g transform="translate(250, 100)">
+                    <line x1="-20" y1="-30" x2="-20" y2="30" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                    <line x1="20" y1="-15" x2="20" y2="15" stroke="white" stroke-width="10" stroke-linecap="round"/>
+                </g>
+
+                <circle cx="100" cy="175" r="30" fill="#161b22" stroke="#4b5563" stroke-width="6"/>
+                <text x="100" y="183" fill="white" font-size="22" font-weight="bold" text-anchor="middle">A</text>
+                <text x="50" y="180" fill="var(--text-light)" font-size="20" font-weight="bold" text-anchor="end">2.0 A</text>
+                <polygon points="90,215 100,230 110,215" fill="var(--text-light)"/>
+                
+                <!-- Interactive Node B -->
+                <g transform="translate(350, 100)" class="hover-scale" onclick="openP4Popover(evt, 'ib')" style="color: #f59e0b;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-ib" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-ib" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">⬅</text>
+                    <text x="0" y="-25" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">B</text>
+                    <text id="p4-ib-text" x="0" y="38" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">I<tspan baseline-shift="sub" font-size="0.75em">B</tspan> = ? A</text>
+                </g>
+
+                <!-- Interactive Node A -->
+                <g transform="translate(250, 250)" class="hover-scale" onclick="openP4Popover(evt, 'ia')" style="color: #10b981;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-ia" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-ia" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">➡</text>
+                    <text x="0" y="-25" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">A</text>
+                    <text id="p4-ia-text" x="0" y="38" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">I<tspan baseline-shift="sub" font-size="0.75em">A</tspan> = ? A</text>
+                </g>
+
+                <rect x="140" y="235" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                <rect x="300" y="235" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+            </svg>
+
+            <!-- P4 SVG 3: Parallel Circuit -->
+            <svg id="p4-svg-3" viewBox="0 0 500 350" style="display:none; max-width: 850px; max-height: 50vh;">
+                <path d="M 100 100 L 400 100 L 400 300 L 100 300 Z" fill="none" stroke="var(--wire-color)" stroke-width="16" stroke-linejoin="round"/>
+                <path d="M 100 200 L 400 200" fill="none" stroke="var(--wire-color)" stroke-width="16" stroke-linecap="round"/>
+                
+                <circle cx="100" cy="200" r="10" fill="var(--text-light)"/>
+                <circle cx="400" cy="200" r="10" fill="var(--text-light)"/>
+
+                <g transform="translate(250, 100)">
+                    <line x1="-20" y1="-30" x2="-20" y2="30" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                    <line x1="20" y1="-15" x2="20" y2="15" stroke="white" stroke-width="10" stroke-linecap="round"/>
+                </g>
+
+                <!-- Interactive Node D -->
+                <g transform="translate(350, 100)" class="hover-scale" onclick="openP4Popover(evt, 'id')" style="color: #ef4444;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-id" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-id" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">⬅</text>
+                    <text x="0" y="-25" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">D</text>
+                    <text id="p4-id-text" x="0" y="38" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">I<tspan baseline-shift="sub" font-size="0.75em">D</tspan> = ? A</text>
+                </g>
+
+                <circle cx="100" cy="150" r="25" fill="#161b22" stroke="#4b5563" stroke-width="6"/>
+                <text x="100" y="158" fill="white" font-size="18" font-weight="bold" text-anchor="middle">A</text>
+                <g transform="translate(60, 150)">
+                    <text x="0" y="5" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="end">3.2 A</text>
+                    <line x1="10" y1="-20" x2="10" y2="15" stroke="var(--text-light)" stroke-width="3"/>
+                    <polygon points="5,15 15,15 10,25" fill="var(--text-light)"/>
+                </g>
+
+                <!-- Interactive Node C -->
+                <g transform="translate(200, 200)" class="hover-scale" onclick="openP4Popover(evt, 'ic')" style="color: #3b82f6;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-ic" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-ic" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">➡</text>
+                    <text x="0" y="-25" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">C</text>
+                    <text id="p4-ic-text" x="0" y="38" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">I<tspan baseline-shift="sub" font-size="0.75em">C</tspan> = ? A</text>
+                </g>
+
+                <circle cx="200" cy="300" r="25" fill="#161b22" stroke="#4b5563" stroke-width="6"/>
+                <text x="200" y="308" fill="white" font-size="18" font-weight="bold" text-anchor="middle">A</text>
+                <text x="200" y="345" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="middle">2.6 A</text>
+
+                <rect x="290" y="185" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                <rect x="290" y="285" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+            </svg>
+
+            <!-- P4 SVG 4: Mixed Circuit -->
+            <svg id="p4-svg-4" viewBox="0 0 500 380" style="display:none; max-width: 850px; max-height: 50vh;">
+                <path d="M 100 50 L 350 50 L 350 150 L 200 150 L 200 250 L 100 250 Z" fill="none" stroke="var(--wire-color)" stroke-width="16" stroke-linejoin="round"/>
+                <path d="M 200 250 L 350 250 L 350 150" fill="none" stroke="var(--wire-color)" stroke-width="16" stroke-linejoin="round"/>
+                
+                <circle cx="200" cy="250" r="10" fill="var(--text-light)"/>
+                <circle cx="350" cy="150" r="10" fill="var(--text-light)"/>
+
+                <g transform="translate(250, 50)">
+                    <line x1="-20" y1="-30" x2="-20" y2="30" stroke="white" stroke-width="6" stroke-linecap="round"/>
+                    <line x1="20" y1="-15" x2="20" y2="15" stroke="white" stroke-width="10" stroke-linecap="round"/>
+                </g>
+
+                <circle cx="100" cy="150" r="25" fill="#161b22" stroke="#4b5563" stroke-width="6"/>
+                <text x="100" y="158" fill="white" font-size="18" font-weight="bold" text-anchor="middle">A</text>
+                <g transform="translate(40, 150)">
+                    <text x="0" y="5" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="end">1.8 A</text>
+                    <line x1="10" y1="-20" x2="10" y2="15" stroke="var(--text-light)" stroke-width="3"/>
+                    <polygon points="5,15 15,15 10,25" fill="var(--text-light)"/>
+                </g>
+
+                <circle cx="200" cy="200" r="25" fill="#161b22" stroke="#4b5563" stroke-width="6"/>
+                <text x="200" y="208" fill="white" font-size="18" font-weight="bold" text-anchor="middle">A</text>
+                <g transform="translate(180, 200)">
+                    <text x="-5" y="5" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="end">0.6 A</text>
+                    <line x1="10" y1="20" x2="10" y2="-15" stroke="var(--text-light)" stroke-width="3"/>
+                    <polygon points="5,-15 15,-15 10,-25" fill="var(--text-light)"/>
+                </g>
+
+                <!-- Interactive Node E -->
+                <g transform="translate(235, 250)" class="hover-scale" onclick="openP4Popover(evt, 'ie')" style="color: #a855f7;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-ie" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-ie" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">➡</text>
+                    <text x="0" y="-25" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">E</text>
+                    <text id="p4-ie-text" x="0" y="38" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">I<tspan baseline-shift="sub" font-size="0.75em">E</tspan> = ? A</text>
+                </g>
+
+                <!-- Interactive Node F -->
+                <g transform="translate(350, 100)" class="hover-scale" onclick="openP4Popover(evt, 'if_var')" style="color: #ec4899;">
+                    <circle cx="0" cy="0" r="30" fill="transparent" class="click-area"/>
+                    <circle id="p4-box-if_var" cx="0" cy="0" r="16" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area"/>
+                    <text id="p4-arrow-if_var" x="0" y="7" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">⬆</text>
+                    <text x="25" y="6" fill="currentColor" font-size="20" font-weight="bold" text-anchor="start">F</text>
+                    <text id="p4-if_var-text" x="-25" y="6" fill="currentColor" font-size="16" font-weight="bold" text-anchor="end">I<tspan baseline-shift="sub" font-size="0.75em">F</tspan> = ? A</text>
+                </g>
+
+                <g>
+                    <rect x="120" y="235" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <rect x="270" y="135" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <rect x="270" y="235" width="60" height="30" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                </g>
+            </svg>
+        </div>
+    </div>
+
+    <!-- ================= PAGE 5: DYNAMIC KVL (Voltage Law Simulator) ================= -->
+    <div id="page-5" class="page">
+        <header>
+            <h1>KIRCHHOFF'S LAW 2 : VOLTAGE LAW</h1>
+            <p class="subtitle">แรงดันที่จ่ายออก = ผลรวมแรงดันตกคร่อมทุกตัวต้านทาน &nbsp;(Σ V = 0)</p>
+            
+            <div class="equation-display" style="margin-top: 10px; font-size: 1.5rem; display: inline-block;">
+                <span class="color-in">V<sub>แหล่งกำเนิด</sub></span> <span style="color:white">=</span> 
+                <span class="color-out1">V<sub>1</sub></span> <span style="color:white">+</span> 
+                <span class="color-out2" id="eq-v2" style="display:none;">V<sub>2</sub></span> <span id="eq-plus-2" style="color:white; display:none;">+</span> 
+                <span class="color-out3" id="eq-v3" style="display:none;">V<sub>3</sub></span>
+                <br>
+                <div id="kvl-eq-calc" style="font-size: 1.4rem; color: var(--text-light); font-weight: 600; margin-top: 5px; background: rgba(0,0,0,0.3); padding: 5px 20px; border-radius: 15px;"></div>
+            </div>
+
+            <div class="kcl-config" style="display: flex; justify-content: center; gap: 30px; margin-top: 15px;">
+                <div style="background: rgba(255,255,255,0.1); padding: 10px 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);">
+                    <span style="font-weight:bold; margin-right: 10px; color: #f59e0b;">จำนวนตัวต้านทาน</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKVLCount(-1)">-</button>
+                    <span id="kvl-count-disp" style="margin: 0 10px; font-size: 1.3rem; font-weight: bold; width: 20px; display: inline-block;">2</span>
+                    <button class="adjust-btn" style="display:inline-flex; width:28px; height:28px; font-size:1rem;" onclick="changeKVLCount(1)">+</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="graphic-container" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 10px; align-items: stretch; justify-content: center;">
+            <!-- Dynamic SVG Area -->
+            <svg id="kvl-dynamic-svg" viewBox="-15 5 440 280" style="flex: 1.2; min-width: 340px; max-width: 550px; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: block;">
+            </svg>
+
+            <!-- KVL Info Panel (Staircase) -->
+            <div id="kvl-info-panel" style="flex:1; min-width:320px; max-width:480px; display:flex; flex-direction:column; gap:18px; justify-content: center;">
+                <div style="background:rgba(0,0,0,0.3); border-radius:20px; padding:20px 20px 10px;">
+                    <div style="font-size:0.9rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; text-align:center;">แผนภาพขั้นบันไดแรงดัน (Voltage Drops)</div>
+                    <svg id="kvl-staircase" viewBox="0 0 300 280" style="width:100%;"></svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls kcl-compact-slider" id="kvl-controls" style="padding-top: 15px;">
+        </div>
+    </div>
+
+    <!-- ================= PAGE 6: KVL Practice ================= -->
+    <div id="page-6" class="page">
+        <header>
+            <div class="scenario-nav">
+                <button id="p6-prev" class="scen-btn" onclick="navP6(-1)" disabled>◀</button>
+                <p class="title-badge" id="p6-scenario-title">โจทย์ฝึกฝน KVL 1/4: วงจรอนุกรมเบื้องต้น</p>
+                <button id="p6-next" class="scen-btn" onclick="navP6(1)" disabled>▶</button>
+            </div>
+            <div class="mission-box" style="padding: 15px 30px;">
+                <div id="p6-question" style="text-align: center; font-size: 1.3rem; margin-bottom: 5px;">คำสั่ง: คลิกที่ตัวแปรเพื่อระบุ <b>แรงดันตกคร่อม (Voltage Drop)</b> ให้สอดคล้องกับกฎ KVL (ΣV=0)</div>
+                <button id="p6-next-btn-large" class="nav-btn glow action-btn" style="display: none; margin-top: 10px; font-size: 1.1rem; padding: 10px 30px;" onclick="navP6(1)">ทำข้อต่อไป ➔</button>
+            </div>
+        </header>
+
+        <div class="graphic-container" style="position: relative;">
+            
+            <!-- P6 SVG 1: Series Circuit -->
+            <svg id="p6-svg-1" viewBox="0 0 500 350" style="display:block; max-width: 850px; max-height: 50vh;">
+                <!-- Wires -->
+                <path d="M 100 120 L 400 120 L 400 280 L 100 280 Z" fill="none" stroke="var(--wire-color)" stroke-width="12" stroke-linejoin="round"/>
+                
+                <!-- Battery 10V -->
+                <g transform="translate(250, 120)">
+                    <line x1="-15" y1="-25" x2="-15" y2="25" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="15" y1="-12" x2="15" y2="12" stroke="white" stroke-width="8" stroke-linecap="round"/>
+                    <text x="-30" y="5" fill="white" font-size="20" font-weight="bold">+</text>
+                    <polyline points="-60,-15 -60,-40 60,-40 60,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-30" y="-55" width="60" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="22" font-weight="bold" text-anchor="middle">10 V</text>
+                </g>
+
+                <!-- Resistor 1 -->
+                <g transform="translate(180, 280)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-45,-20 -45,-50 45,-50 45,-20" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-35" y="-65" width="70" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-45" fill="var(--text-light)" font-size="20" font-weight="bold" text-anchor="middle">6.0 V</text>
+                </g>
+
+                <!-- Resistor 2 Target A -->
+                <g transform="translate(320, 280)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'a')" style="color: #f59e0b;">
+                        <polyline points="-45,-20 -45,-50 45,-50 45,-20" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-a" x="-40" y="-65" width="80" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-a-text" x="0" y="-43" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">A = ? V</text>
+                    </g>
+                </g>
+            </svg>
+
+            <!-- P6 SVG 2: Parallel Loops -->
+            <svg id="p6-svg-2" viewBox="0 0 500 350" style="display:none; max-width: 850px; max-height: 50vh;">
+                <path d="M 80 80 L 420 80 L 420 280 L 80 280 Z" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                <path d="M 80 180 L 420 180" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linecap="round"/>
+                <circle cx="80" cy="180" r="6" fill="var(--text-light)"/><circle cx="420" cy="180" r="6" fill="var(--text-light)"/>
+
+                <g transform="translate(180, 80)">
+                    <line x1="-15" y1="-25" x2="-15" y2="25" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="15" y1="-12" x2="15" y2="12" stroke="white" stroke-width="8" stroke-linecap="round"/>
+                    <polyline points="-50,-15 -50,-40 30,-40 30,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-40" y="-55" width="60" height="30" fill="var(--bg-color)"/>
+                    <text x="-10" y="-35" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="middle">6.0 V</text>
+                </g>
+                <g transform="translate(320, 80)">
+                    <line x1="-15" y1="-25" x2="-15" y2="25" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="15" y1="-12" x2="15" y2="12" stroke="white" stroke-width="8" stroke-linecap="round"/>
+                    <polyline points="-30,-15 -30,-40 50,-40 50,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-20" y="-55" width="60" height="30" fill="var(--bg-color)"/>
+                    <text x="10" y="-35" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="middle">6.0 V</text>
+                </g>
+
+                <g transform="translate(250, 180)">
+                    <rect x="-45" y="-12" width="90" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'b')" style="color: #10b981;">
+                        <polyline points="-60,-20 -60,-50 60,-50 60,-20" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-b" x="-45" y="-65" width="90" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-b-text" x="0" y="-43" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">B = ? V</text>
+                    </g>
+                </g>
+
+                <g transform="translate(180, 280)">
+                    <rect x="-40" y="-12" width="80" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'c')" style="color: #3b82f6;">
+                        <polyline points="-50,-20 -50,-50 50,-50 50,-20" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-c" x="-45" y="-65" width="90" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-c-text" x="0" y="-43" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">C = ? V</text>
+                    </g>
+                </g>
+
+                <g transform="translate(320, 280)">
+                    <rect x="-40" y="-12" width="80" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-50,-20 -50,-50 50,-50 50,-20" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-35" y="-65" width="70" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-45" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="middle">3.0 V</text>
+                </g>
+            </svg>
+
+            <!-- P6 SVG 3: Series-Parallel -->
+            <svg id="p6-svg-3" viewBox="0 0 500 350" style="display:none; max-width: 850px; max-height: 50vh;">
+                <!-- Main Outer Wires -->
+                <path d="M 80 80 L 420 80 L 420 230" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                <path d="M 80 80 L 80 230 L 280 230" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                
+                <!-- Parallel Branches -->
+                <path d="M 280 230 L 280 180 L 420 180" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                <path d="M 280 230 L 280 280 L 420 280 L 420 230" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                
+                <!-- Junction Dots -->
+                <circle cx="280" cy="230" r="6" fill="var(--text-light)"/>
+                <circle cx="420" cy="230" r="6" fill="var(--text-light)"/>
+
+                <g transform="translate(200, 80)">
+                    <line x1="-15" y1="-25" x2="-15" y2="25" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                    <line x1="15" y1="-12" x2="15" y2="12" stroke="white" stroke-width="8" stroke-linecap="round"/>
+                    <polyline points="-50,-15 -50,-40 50,-40 50,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-30" y="-55" width="60" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="20" font-weight="bold" text-anchor="middle">12 V</text>
+                </g>
+
+                <g transform="translate(180, 230)">
+                    <rect x="-40" y="-12" width="80" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'd')" style="color: #ef4444;">
+                        <polyline points="-55,-20 -55,-50 55,-50 55,-20" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-d" x="-45" y="-65" width="90" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-d-text" x="0" y="-43" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">D = ? V</text>
+                    </g>
+                </g>
+
+                <g transform="translate(350, 180)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-45,-20 -45,-45 45,-45 45,-20" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-25" y="-60" width="50" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-40" fill="var(--text-light)" font-size="18" font-weight="bold" text-anchor="middle">4 V</text>
+                </g>
+
+                <g transform="translate(350, 280)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'e')" style="color: #a855f7;">
+                        <polyline points="-45,-20 -45,-50 45,-50 45,-20" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-e" x="-40" y="-65" width="80" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-e-text" x="0" y="-43" fill="currentColor" font-size="20" font-weight="bold" text-anchor="middle">E = ? V</text>
+                    </g>
+                </g>
+            </svg>
+
+            <!-- P6 SVG 4: Complex -->
+            <svg id="p6-svg-4" viewBox="0 0 500 350" style="display:none; max-width: 850px; max-height: 50vh;">
+                <path d="M 60 70 L 440 70 L 440 260 M 60 70 L 60 210" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                
+                <path d="M 60 210 L 60 160 L 260 160 L 260 210" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                <path d="M 60 210 L 60 260 L 260 260 L 260 210" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+                <circle cx="60" cy="210" r="6" fill="var(--text-light)"/><circle cx="260" cy="210" r="6" fill="var(--text-light)"/>
+                
+                <path d="M 260 210 L 260 260 L 440 260" fill="none" stroke="var(--wire-color)" stroke-width="10" stroke-linejoin="round"/>
+
+                <g transform="translate(130, 70)">
+                    <line x1="-10" y1="-20" x2="-10" y2="20" stroke="white" stroke-width="4"/><line x1="10" y1="-10" x2="10" y2="10" stroke="white" stroke-width="8"/>
+                    <polyline points="-25,-15 -25,-40 25,-40 25,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-20" y="-55" width="40" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="16" font-weight="bold" text-anchor="middle">3.0 V</text>
+                </g>
+                <g transform="translate(230, 70)">
+                    <line x1="-10" y1="-20" x2="-10" y2="20" stroke="white" stroke-width="4"/><line x1="10" y1="-10" x2="10" y2="10" stroke="white" stroke-width="8"/>
+                    <polyline points="-25,-15 -25,-40 25,-40 25,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-20" y="-55" width="40" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="16" font-weight="bold" text-anchor="middle">9.0 V</text>
+                </g>
+
+                <g transform="translate(360, 70)">
+                    <rect x="-30" y="-12" width="60" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-40,-15 -40,-40 40,-40 40,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-20" y="-55" width="40" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="16" font-weight="bold" text-anchor="middle">3.0 V</text>
+                </g>
+
+                <g transform="translate(120, 160)">
+                    <rect x="-25" y="-12" width="50" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-30,-15 -30,-40 30,-40 30,-15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-20" y="-55" width="40" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="-35" fill="var(--text-light)" font-size="14" font-weight="bold" text-anchor="middle">2.0 V</text>
+                </g>
+
+                <g transform="translate(200, 160)">
+                    <rect x="-25" y="-12" width="50" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'f')" style="color: #ec4899;">
+                        <polyline points="-35,-15 -35,-40 35,-40 35,-15" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-f" x="-35" y="-55" width="70" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-f-text" x="0" y="-36" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">F = ? V</text>
+                    </g>
+                </g>
+
+                <g transform="translate(160, 260)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <polyline points="-45,15 -45,40 45,40 45,15" fill="none" stroke="var(--water-color)" stroke-width="2"/>
+                    <rect x="-25" y="25" width="50" height="30" fill="var(--bg-color)"/>
+                    <text x="0" y="45" fill="var(--text-light)" font-size="16" font-weight="bold" text-anchor="middle">6.0 V</text>
+                </g>
+
+                <g transform="translate(350, 260)">
+                    <rect x="-35" y="-12" width="70" height="24" fill="#161b22" stroke="var(--resistance-color)" stroke-width="4"/>
+                    <g class="hover-scale" onclick="openP6Popover(evt, 'g')" style="color: #f97316;">
+                        <polyline points="-45,15 -45,40 45,40 45,15" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <rect id="p6-box-g" x="-40" y="25" width="80" height="30" fill="var(--bg-color)" stroke="currentColor" class="highlight-box click-area" rx="4"/>
+                        <text id="p6-g-text" x="0" y="45" fill="currentColor" font-size="16" font-weight="bold" text-anchor="middle">G = ? V</text>
+                    </g>
+                </g>
+            </svg>
+        </div>
+    </div>
+
+    <script>
+        // ================= GLOBAL HELPERS & TOAST =================
+        let isPage1FullyUnlocked = false;
+        let isPage2FullyUnlocked = false;
+        let isPage3Done = false; 
+        let isPage4FullyUnlocked = false;
+        let isPage5Done = false;
+        let isPage6FullyUnlocked = false;
+
+        function adjustValue(sliderId, delta) {
+            const slider = document.getElementById(sliderId);
+            if (!slider) return;
+            let newVal = parseFloat(slider.value) + delta;
+            
+            if (sliderId.includes('i-slider') || sliderId === 'p2-i-slider') {
+                newVal = Math.round(newVal * 10) / 10; 
+            }
+            
+            if (newVal >= parseFloat(slider.min) && newVal <= parseFloat(slider.max)) {
+                slider.value = newVal;
+                slider.dispatchEvent(new Event('input'));
+            }
+        }
+
+        let toastTimeout;
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = msg;
+            toast.className = `toast show ${type}`;
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        function updateDots() {
+            for (let i = 1; i <= totalPages; i++) {
+                const dot = document.getElementById(`dot-${i}`);
+                if (!dot) continue;
+                dot.className = 'dot'; 
+                
+                let isPassed = false;
+                if (i === 1 && isPage1FullyUnlocked) isPassed = true;
+                if (i === 2 && isPage2FullyUnlocked) isPassed = true;
+                if (i === 3 && isPage3Done) isPassed = true; 
+                if (i === 4 && isPage4FullyUnlocked) isPassed = true;
+                if (i === 5 && isPage5Done) isPassed = true;
+                if (i === 6 && isPage6FullyUnlocked) isPassed = true;
+                
+                if (isPassed || i < globalPage) {
+                    dot.classList.add('completed');
+                    dot.innerHTML = '&#10003;'; 
+                } else {
+                    dot.innerHTML = i;
+                }
+
+                if (i === globalPage) {
+                    dot.classList.add('active');
+                }
+            }
+        }
+
+        // ================= NAVIGATION SYSTEM =================
+        let globalPage = 1;
+        const totalPages = 6;
+
+        function changeGlobalPage(step) {
+            document.getElementById(`page-${globalPage}`).classList.remove('active');
+            globalPage += step;
+            document.getElementById(`page-${globalPage}`).classList.add('active');
+            
+            document.getElementById('btn-prev').disabled = (globalPage === 1);
+            const nextBtn = document.getElementById('btn-next');
+            
+            if (globalPage > 3) isPage3Done = true; 
+            if (globalPage > 5) isPage5Done = true; 
+            
+            if(globalPage === totalPages) {
+                nextBtn.disabled = true;
+                nextBtn.classList.remove('glow');
+            } else {
+                let unlocked = false;
+                if (globalPage === 1) unlocked = isPage1FullyUnlocked;
+                if (globalPage === 2) unlocked = isPage2FullyUnlocked;
+                if (globalPage === 3) unlocked = true; 
+                if (globalPage === 4) unlocked = isPage4FullyUnlocked;
+                if (globalPage === 5) unlocked = true; 
+                if (globalPage === 6) unlocked = isPage6FullyUnlocked;
+                
+                nextBtn.disabled = !unlocked;
+                if(unlocked) nextBtn.classList.add('glow');
+                else nextBtn.classList.remove('glow');
+            }
+            
+            if (globalPage === 1) updateScenarioPhysics();
+            if (globalPage === 2) updatePage2Display();
+            if (globalPage === 3) initKCL();
+            if (globalPage === 4 && !isPage4FullyUnlocked && p4CurrentScen === 1) initP4Scen(1);
+            if (globalPage === 5) initKVL();
+            if (globalPage === 6 && !isPage6FullyUnlocked && p6CurrentScen === 1) initP6Scen(1);
+            
+            updateDots();
+        }
+
+        // ================= PAGE 1: DRAG & DROP LOGIC =================
+        let expectedFills = 3; let currentFills = 0; let selectedType = null;
+        function selectItem(el, type) { document.querySelectorAll('.drag-item').forEach(e => e.classList.remove('selected')); el.classList.add('selected'); selectedType = type; }
+        function clickDropZone(zone) {
+            if (!selectedType || zone.classList.contains('filled')) return;
+            let expectedArr = zone.dataset.expected.split(',');
+            let alreadyUsed = Array.from(document.querySelectorAll('.drop-zone.filled')).some(z => z.innerText === selectedType);
+            if (expectedArr.includes(selectedType) && !alreadyUsed) {
+                zone.innerText = selectedType; zone.className = `drop-zone filled bg-${selectedType.toLowerCase()}`; currentFills++; selectedType = null; document.querySelectorAll('.drag-item').forEach(e => e.classList.remove('selected'));
+                if (currentFills === expectedFills) { showToast("✅ สมบูรณ์แบบ! ลองปรับค่าตัวแปรดูนะ", "success"); document.getElementById(`controls-scen-1`).classList.remove('locked'); isPage1FullyUnlocked = true; document.getElementById('btn-next').disabled = false; document.getElementById('btn-next').classList.add('glow'); updateDots(); }
+            } else { zone.classList.add('error'); setTimeout(() => zone.classList.remove('error'), 300); }
+        }
+        function dragStart(e, type) { e.dataTransfer.setData('text/plain', type); selectedType = type; }
+        function allowDrop(e) { e.preventDefault(); }
+        function drop(e, zone) { e.preventDefault(); selectedType = e.dataTransfer.getData('text/plain'); clickDropZone(zone); }
+        function updateScenarioPhysics() {
+            let I = parseFloat(document.getElementById('i-slider-1').value); let R = parseFloat(document.getElementById('r-slider-1').value); let V = I * R;
+            document.getElementById('i-val-1').innerText = I.toFixed(1) + " A"; document.getElementById('r-val-1').innerText = R.toFixed(1) + " Ω"; document.getElementById('v-val-1').innerText = V.toFixed(1) + " V";
+            document.getElementById('svg-v-val').textContent = V.toFixed(1) + " V"; document.getElementById('svg-i-val').textContent = I.toFixed(1) + " A"; document.getElementById('svg-r-val').textContent = R.toFixed(1) + " Ω";
+            const fillPercentage = Math.min((V / 50) * 100, 100); 
+            document.getElementById('battery-fill').setAttribute('height', fillPercentage); document.getElementById('battery-fill').setAttribute('y', 125 + (100 - fillPercentage)); document.getElementById('battery-glow').setAttribute('opacity', 0.2 + (fillPercentage/100) * 0.6);
+            document.getElementById('electron-path').style.animationDuration = Math.min(Math.max(5 / I, 0.2), 15) + 's';
+            let P = V * I; const bulbLight = document.getElementById('bulb-light'); if (bulbLight) { bulbLight.setAttribute('opacity', Math.min(Math.max(P / 40, 0.15), 1)); bulbLight.setAttribute('r', Math.min(10 + (P * 1.5), 100)); }
+        }
+
+        // ================= PAGE 2: Unsolvable =================
+        function updatePage2Display() { let p2Slider = document.getElementById('p2-i-slider'); if(p2Slider) { let val = parseFloat(p2Slider.value); document.getElementById('p2-i-val').innerText = val.toFixed(1) + " A"; document.getElementById('p2-ix-text').textContent = `I ตรงกลาง = ${val.toFixed(1)} A`; } }
+        function testPage2() {
+            document.getElementById('p2-el-a').classList.remove('paused'); document.getElementById('p2-el-a').style.animationDuration = '0.5s';
+            document.getElementById('p2-el-b').classList.remove('paused'); document.getElementById('p2-el-b').style.animationDuration = '0.5s';
+            document.getElementById('p2-measured-val').innerText = "ขัดแย้งกัน!"; document.getElementById('p2-result-board').className = 'control-group result-board error';
+            showToast("ถ้าใช้ V=IR คิดจากแบต 12V จะได้ I=2.4A แต่คิดจากแบต 9V จะได้ I=1.8A ค่าไม่เท่ากัน!", "error");
+            setTimeout(() => { document.getElementById('p2-result-board').className = 'control-group result-board success'; document.getElementById('p2-measured-val').innerText = "V=IR ไม่พอ"; isPage2FullyUnlocked = true; document.getElementById('btn-next').disabled = false; document.getElementById('btn-next').classList.add('glow'); updateDots(); }, 4500);
+        }
+
+        // ================= PAGE 3: DYNAMIC KCL =================
+        let kclInCount = 1; let kclOutCount = 1; let kclInValues = [10, 0, 0]; let kclOutValues = [10, 0, 0]; 
+        function initKCL() { renderKCLSVG(); renderKCLControls(); updateKCLFromSliders(); }
+        function changeKCLCount(type, delta) {
+            if (type === 'in') kclInCount = Math.max(1, Math.min(3, kclInCount + delta)); else kclOutCount = Math.max(1, Math.min(3, kclOutCount + delta));
+            document.getElementById('in-count-disp').innerText = kclInCount; document.getElementById('out-count-disp').innerText = kclOutCount; renderKCLSVG(); renderKCLControls(); updateKCLFromSliders();
+        }
+        function getPipeY(count) { if (count === 1) return [175]; if (count === 2) return [100, 250]; if (count === 3) return [60, 175, 290]; return [175]; }
+        function renderKCLSVG() {
+            const svg = document.getElementById('kcl-svg'); let html = `<circle cx="250" cy="175" r="50" fill="#ffffff" opacity="0.1" filter="blur(10px)"/>`;
+            const inY = getPipeY(kclInCount); const outY = getPipeY(kclOutCount);
+            inY.forEach(y => html += `<path d="M 40 ${y} L 250 175" stroke="var(--pipe-color)" stroke-width="36" stroke-linecap="round" fill="none"/>`);
+            outY.forEach(y => html += `<path d="M 250 175 L 460 ${y}" stroke="var(--pipe-color)" stroke-width="30" stroke-linecap="round" fill="none"/>`);
+            html += `<circle cx="250" cy="175" r="30" fill="#161b22" stroke="#4b5563" stroke-width="6"/>`;
+            inY.forEach((y, i) => { html += `<path id="kcl-flow-in-${i}" class="water-flow" d="M 40 ${y} L 240 ${175 + (y-175)*0.1}" stroke="#10b981" stroke-width="14" stroke-linecap="round" fill="none"/><text x="110" y="${y - 25}" fill="#10b981" font-size="18" font-weight="bold" text-anchor="middle">เข้า ${i+1}</text>`; });
+            outY.forEach((y, i) => { const color = i === kclOutCount - 1 ? "#ef4444" : "#f59e0b"; html += `<path id="kcl-flow-out-${i}" class="water-flow" d="M 260 ${175 + (y-175)*0.1} L 460 ${y}" stroke="${color}" stroke-width="10" stroke-linecap="round" fill="none"/><text x="390" y="${y - 25}" fill="${color}" font-size="18" font-weight="bold" text-anchor="middle">ออก ${i+1}</text>`; });
+            svg.innerHTML = html;
+        }
+        function renderKCLControls() {
+            const container = document.getElementById('kcl-controls');
+            let inHtml = `<div class="kcl-column" style="border: 2px solid rgba(16, 185, 129, 0.3);"><div class="kcl-col-header color-in">ฝั่งขาเข้า (Inputs)</div>`;
+            for(let i=0; i<kclInCount; i++) { inHtml += `<div class="control-group color-in" style="width: 100%;"><div class="control-label">ท่อเข้า ${i+1}</div><div class="val-display" id="kcl-in-val-${i}">${kclInValues[i]} A</div><div class="slider-wrapper"><button class="adjust-btn" onclick="adjustValue('kcl-in-slider-${i}', -1)">-</button><input type="range" class="slider-in" id="kcl-in-slider-${i}" min="0" max="20" step="1" value="${kclInValues[i]}" oninput="updateKCLFromSliders()"><button class="adjust-btn" onclick="adjustValue('kcl-in-slider-${i}', 1)">+</button></div></div>`; } inHtml += `</div>`;
+            let outHtml = `<div class="kcl-column" style="border: 2px solid rgba(245, 158, 11, 0.3);"><div class="kcl-col-header color-out1">ฝั่งขาออก (Outputs)</div>`;
+            for(let i=0; i<kclOutCount - 1; i++) { outHtml += `<div class="control-group color-out1" style="width: 100%;"><div class="control-label">ท่อออก ${i+1}</div><div class="val-display" id="kcl-out-val-${i}">${kclOutValues[i]} A</div><div class="slider-wrapper"><button class="adjust-btn" onclick="adjustValue('kcl-out-slider-${i}', -1)">-</button><input type="range" class="slider-out-0" id="kcl-out-slider-${i}" min="0" max="40" step="1" value="${kclOutValues[i]}" oninput="updateKCLFromSliders()"><button class="adjust-btn" onclick="adjustValue('kcl-out-slider-${i}', 1)">+</button></div></div>`; }
+            outHtml += `<div class="control-group result-board color-out2" style="width: 100%; border-width: 2px; padding: 5px;"><div class="control-label">ท่อออก ${kclOutCount} (ผลลัพธ์)</div><div class="val-display" id="kcl-out-val-last" style="margin-bottom:0;">?.? A</div></div></div>`;
+            container.innerHTML = `<div class="kcl-controls-layout">${inHtml}<div class="kcl-divider">➔</div>${outHtml}</div>`;
+        }
+        function updateKCLFromSliders() {
+            let sumIn = 0;
+            for(let i=0; i<kclInCount; i++) { const s = document.getElementById(`kcl-in-slider-${i}`); if(s) { kclInValues[i] = parseInt(s.value); document.getElementById(`kcl-in-val-${i}`).innerText = kclInValues[i] + " A"; sumIn += kclInValues[i]; } }
+            let sumOutUsed = 0;
+            for(let i=0; i<kclOutCount - 1; i++) { const s = document.getElementById(`kcl-out-slider-${i}`); if(s) { let val = parseInt(s.value); let available = sumIn - sumOutUsed; if (val > available) { val = available; s.value = val; } s.max = sumIn; kclOutValues[i] = val; document.getElementById(`kcl-out-val-${i}`).innerText = kclOutValues[i] + " A"; sumOutUsed += kclOutValues[i]; } }
+            let lastOut = Math.max(0, sumIn - sumOutUsed); const lastOutEl = document.getElementById(`kcl-out-val-last`); if(lastOutEl) lastOutEl.innerText = lastOut + " A";
+            const getSpeed = (c) => c === 0 ? 999 : Math.max(0.3, Math.min(10 / c, 10));
+            for(let i=0; i<kclInCount; i++) { const flow = document.getElementById(`kcl-flow-in-${i}`); if(flow) { flow.style.animationDuration = getSpeed(kclInValues[i]) + 's'; flow.setAttribute('stroke-width', 4 + kclInValues[i]*0.8); flow.style.opacity = kclInValues[i] === 0 ? 0 : 1; } }
+            for(let i=0; i<kclOutCount; i++) { const flow = document.getElementById(`kcl-flow-out-${i}`); if(flow) { let val = (i === kclOutCount - 1) ? lastOut : kclOutValues[i]; flow.style.animationDuration = getSpeed(val) + 's'; flow.setAttribute('stroke-width', 4 + val*0.8); flow.style.opacity = val === 0 ? 0 : 1; } }
+            let inArr = kclInValues.slice(0, kclInCount).map(v => `${v} A`); let inHtml = `<span class="color-in">${inArr.join(' <span style="color:white">+</span> ')}</span>`;
+            let outArrHTML = []; for (let i=0; i<kclOutCount-1; i++) outArrHTML.push(`<span class="color-out1">${kclOutValues[i]} A</span>`); outArrHTML.push(`<span class="color-out2">${lastOut} A</span>`);
+            document.getElementById('kcl-eq-calc').innerHTML = `${inHtml} <span style="color:white">=</span> ${outArrHTML.join(' <span style="color:white">+</span> ')} <span style="color:var(--text-muted); font-size:1rem;">(รวม ${sumIn} A)</span>`;
+        }
+
+        // ================= PAGE 4: KCL Practice =================
+        let p4CurrentScen = 1; let p4MaxScen = 1; let activeP4Var = ''; let p4Vals = { ix: 0, ia: 0, ib: 0, ic: 0, id: 0, ie: 0, if_var: 0 }; let p4Dir = 'out'; let p4Solved = { ix: false, ia: false, ib: false, ic: false, id: false, ie: false, if_var: false };
+        const p4Config = {
+            ix: { color: 'var(--current-color)', min: 0, max: 10, targetVal: 1.5, targetDir: 'in', type: 'v', labels: ['⬆ ไหลออก (OUT)', '⬇ ไหลเข้า (IN)'], unit: 'A' },
+            ia: { color: '#10b981', min: 0, max: 5, targetVal: 2.0, targetDir: 'right', type: 'h', labels: ['⬅ ไหลซ้าย (L)', '➡ ไหลขวา (R)'], unit: 'A' },
+            ib: { color: '#f59e0b', min: 0, max: 5, targetVal: 2.0, targetDir: 'left', type: 'h', labels: ['⬅ ไหลซ้าย (L)', '➡ ไหลขวา (R)'], unit: 'A' },
+            ic: { color: '#3b82f6', min: 0, max: 5, targetVal: 0.6, targetDir: 'right', type: 'h', labels: ['⬅ ไหลซ้าย (L)', '➡ ไหลขวา (R)'], unit: 'A' },
+            id: { color: '#ef4444', min: 0, max: 10, targetVal: 3.2, targetDir: 'left', type: 'h', labels: ['⬅ ไหลซ้าย (L)', '➡ ไหลขวา (R)'], unit: 'A' },
+            ie: { color: '#a855f7', min: 0, max: 5, targetVal: 1.2, targetDir: 'right', type: 'h', labels: ['⬅ ไหลซ้าย (L)', '➡ ไหลขวา (R)'], unit: 'A' },
+            if_var: { color: '#ec4899', min: 0, max: 5, targetVal: 1.8, targetDir: 'up', type: 'v', labels: ['⬆ ไหลขึ้น (UP)', '⬇ ไหลลง (DOWN)'], unit: 'A' }
+        };
+        function navP4(step) { let next = p4CurrentScen + step; if (next >= 1 && next <= Math.min(4, p4MaxScen)) initP4Scen(next); }
+        function initP4Scen(scen) {
+            p4CurrentScen = scen; closeP4Popover(); const nextLarge = document.getElementById('p4-next-btn-large'); if (nextLarge) nextLarge.style.display = 'none';
+            for(let i=1; i<=4; i++) document.getElementById(`p4-svg-${i}`).style.display = i===scen ? 'block' : 'none';
+            const instructions = [ "คำสั่ง: คลิกที่ <b>จุดตัวแปรบนวงจร</b> เพื่อระบุทิศทางและขนาดของกระแสไฟฟ้าในเส้นลวด X", "คำสั่ง: คลิกที่ <b>จุด A และ B</b> เพื่อระบุทิศทางและขนาดของกระแสไฟฟ้าให้ถูกต้อง", "คำสั่ง: คลิกที่ <b>จุด C และ D</b> เพื่อระบุทิศทางและขนาดของกระแสไฟฟ้าให้ถูกต้อง", "คำสั่ง: คลิกที่ <b>จุด E และ F</b> เพื่อระบุทิศทางและขนาดของกระแสไฟฟ้าให้ถูกต้อง" ];
+            const titles = ["การหากระแสในจุดแยก (Node P)", "กระแสในวงจรอนุกรม", "กระแสในวงจรขนาน", "กระแสในวงจรผสม"];
+            
+            // แก้ไขบรรทัดนี้: อัปเดตเลขข้อให้ตรงกับ scen ปัจจุบัน (เช่น 1/4, 2/4, 3/4, 4/4)
+            document.getElementById('p4-scenario-title').innerText = `โจทย์ฝึกฝน ${scen}/4: ${titles[scen-1]}`; 
+            
+            document.getElementById('p4-question').innerHTML = instructions[scen-1];
+            document.getElementById('p4-prev').disabled = (scen === 1); document.getElementById('p4-next').disabled = (scen >= p4MaxScen); document.getElementById('p4-next').classList.remove('glow');
+        }
+        function openP4Popover(e, v) {
+            if(p4Solved[v]) return; activeP4Var = v; const pop = document.getElementById('p4-popover'); const conf = p4Config[v]; if (!p4Dir) p4Dir = conf.type === 'v' ? 'up' : 'left'; 
+            let extraHTML = v === 'ix' ? `<button id="p4-pop-dir" class="nav-btn" style="border-color:${conf.color}; color:${conf.color}; width:100%; margin-bottom:5px;" onclick="toggleP4PopDir()">${p4Dir === 'out' ? '⬆ ไหลออก (OUT)' : '⬇ ไหลเข้า (IN)'}</button>` : '';
+            document.getElementById('p4-pop-content').innerHTML = `${extraHTML}<div style="display:flex; gap:10px; width:100%; margin-bottom:10px; ${v === 'ix' ? 'display:none;' : ''}"><button id="p4-dir-btn-0" class="nav-btn" style="flex:1; padding:8px 5px; font-size:1rem; color:${conf.color}; border-color:${conf.color};" onclick="setP4PopDir(0)">${conf.labels[0]}</button><button id="p4-dir-btn-1" class="nav-btn" style="flex:1; padding:8px 5px; font-size:1rem; color:${conf.color}; border-color:${conf.color};" onclick="setP4PopDir(1)">${conf.labels[1]}</button></div><div class="val-display" id="p4-pop-val" style="color:${conf.color}; text-align:center; font-size:2rem; margin-bottom:5px;">${p4Vals[v].toFixed(1)} ${conf.unit}</div><div class="slider-wrapper"><button class="adjust-btn" onclick="adjustP4Pop(-0.1)">-</button><input type="range" id="p4-pop-slider" min="${conf.min}" max="${conf.max}" step="0.1" value="${p4Vals[v]}" oninput="updateP4Pop()"><button class="adjust-btn" onclick="adjustP4Pop(0.1)">+</button></div>`;
+            setTimeout(() => { document.getElementById('p4-pop-slider').style.background = `linear-gradient(90deg, #30363d, ${conf.color})`; if (v !== 'ix') { let initIdx = (p4Dir === 'down' || p4Dir === 'in' || p4Dir === 'right') ? 1 : 0; setP4PopDir(initIdx); } }, 10);
+            pop.style.display = 'flex'; pop.style.left = Math.max(150, Math.min(e.clientX, window.innerWidth - 150)) + 'px'; pop.style.top = Math.max(150, Math.min(e.clientY - 20, window.innerHeight - 200)) + 'px';
+        }
+        function closeP4Popover() { document.getElementById('p4-popover').style.display = 'none'; }
+        function toggleP4PopDir() { p4Dir = p4Dir === 'out' ? 'in' : 'out'; document.getElementById('p4-pop-dir').innerText = p4Dir === 'out' ? '⬆ ไหลออก (OUT)' : '⬇ ไหลเข้า (IN)'; const poly = document.getElementById('p4-arrow-poly'); if (poly) poly.setAttribute('points', p4Dir === 'in' ? "235,120 250,150 265,120" : "235,120 250,90 265,120"); document.getElementById('p4-arrow-ix').textContent = p4Dir === 'out' ? '⬆' : '⬇'; }
+        function setP4PopDir(idx) {
+            const conf = p4Config[activeP4Var]; const b0 = document.getElementById('p4-dir-btn-0'); const b1 = document.getElementById('p4-dir-btn-1'); if(!b0 || !b1) return;
+            b0.style.background = 'transparent'; b0.style.color = conf.color; b1.style.background = 'transparent'; b1.style.color = conf.color;
+            if (idx === 0) { b0.style.background = conf.color; b0.style.color = '#000'; p4Dir = activeP4Var === 'ix' ? 'out' : (conf.type === 'v' ? 'up' : 'left'); } 
+            else { b1.style.background = conf.color; b1.style.color = '#000'; p4Dir = activeP4Var === 'ix' ? 'in' : (conf.type === 'v' ? 'down' : 'right'); }
+            document.getElementById(`p4-arrow-${activeP4Var}`).textContent = conf.type === 'h' ? (idx === 0 ? '⬅' : '➡') : (idx === 0 ? '⬆' : '⬇');
+        }
+        function adjustP4Pop(delta) { const s = document.getElementById('p4-pop-slider'); let v = Math.round((parseFloat(s.value) + delta) * 10) / 10; if (v >= s.min && v <= s.max) { s.value = v; updateP4Pop(); } }
+        function updateP4Pop() {
+            const val = parseFloat(document.getElementById('p4-pop-slider').value); p4Vals[activeP4Var] = val; const conf = p4Config[activeP4Var];
+            document.getElementById('p4-pop-val').innerText = val.toFixed(1) + ' ' + conf.unit;
+            let labelMap = { ix: "I = ", ia: 'I<tspan baseline-shift="sub" font-size="0.75em">A</tspan> = ', ib: 'I<tspan baseline-shift="sub" font-size="0.75em">B</tspan> = ', ic: 'I<tspan baseline-shift="sub" font-size="0.75em">C</tspan> = ', id: 'I<tspan baseline-shift="sub" font-size="0.75em">D</tspan> = ', ie: 'I<tspan baseline-shift="sub" font-size="0.75em">E</tspan> = ', if_var: 'I<tspan baseline-shift="sub" font-size="0.75em">F</tspan> = ' };
+            document.getElementById(`p4-${activeP4Var}-text`).innerHTML = labelMap[activeP4Var] + val.toFixed(1) + " " + conf.unit;
+        }
+        function checkP4Popover() {
+            const conf = p4Config[activeP4Var]; let isCorrect = false; let msg = "";
+            if (activeP4Var === 'ix') {
+                if (Math.abs(p4Vals.ix - conf.targetVal) < 0.05 && p4Dir === conf.targetDir) { isCorrect = true; msg = "✅ ถูกต้อง! เมื่อ ΣI_เข้า = ΣI_ออก"; } 
+                else if (Math.abs(p4Vals.ix - conf.targetVal) < 0.05) { showToast("❌ ตัวเลขถูกแล้ว แต่ทิศทางยังผิดอยู่", "error"); return; } 
+                else { showToast("❌ ยังไม่ถูกต้อง ลองตั้งสมการ KCL ดูนะ", "error"); return; }
+            } else {
+                if (Math.abs(p4Vals[activeP4Var] - conf.targetVal) < 0.05 && p4Dir === conf.targetDir) { isCorrect = true; msg = "✅ ถูกต้องและทิศทางสมบูรณ์แบบ!"; } 
+                else if (Math.abs(p4Vals[activeP4Var] - conf.targetVal) < 0.05) { showToast("❌ ตัวเลขถูกแล้ว แต่กระแสไหลไปทางไหนนะ?", "error"); return; } 
+                else { showToast("❌ ยังไม่ถูกต้อง ลองเช็คขนาดกระแสอีกรอบนะ", "error"); return; }
+            }
+            if (isCorrect) {
+                p4Solved[activeP4Var] = true; showToast(msg, "success"); closeP4Popover(); document.getElementById(`p4-arrow-${activeP4Var}`).parentElement.classList.add('solved-box');
+                let scComplete = (p4CurrentScen===1 && p4Solved.ix) || (p4CurrentScen===2 && p4Solved.ia && p4Solved.ib) || (p4CurrentScen===3 && p4Solved.ic && p4Solved.id) || (p4CurrentScen===4 && p4Solved.ie && p4Solved.if_var);
+                if (scComplete) {
+                    if (p4CurrentScen < 4) { p4MaxScen = Math.max(p4MaxScen, p4CurrentScen + 1); document.getElementById('p4-next').disabled = false; document.getElementById('p4-next').classList.add('glow'); const nextLarge = document.getElementById('p4-next-btn-large'); if (nextLarge) { nextLarge.style.display = 'inline-block'; nextLarge.innerText = 'ทำข้อต่อไป ➔'; nextLarge.onclick = () => navP4(1); } } 
+                    else { isPage4FullyUnlocked = true; document.getElementById('btn-next').disabled = false; document.getElementById('btn-next').classList.add('glow'); updateDots(); const nextLarge = document.getElementById('p4-next-btn-large'); if (nextLarge) { nextLarge.style.display = 'inline-block'; nextLarge.innerText = 'ไปเรียนกฎข้อถัดไป ➔'; nextLarge.onclick = () => changeGlobalPage(1); } }
+                }
+            }
+        }
+
+        // ================= PAGE 5: DYNAMIC KVL Logic =================
+        let kvlResCount = 2; 
+        let kvlVSource = 12;
+        let kvlVDrops = [4, 8, 0]; 
+
+        const kvlColors = ["#f59e0b", "#ef4444", "#a855f7"]; 
+
+        function initKVL() {
+            renderKVLSVG();
+            renderKVLControls();
+            updateKVLFromSliders();
+        }
+
+        function changeKVLCount(delta) {
+            kvlResCount = Math.max(1, Math.min(3, kvlResCount + delta));
+            document.getElementById('kvl-count-disp').innerText = kvlResCount;
+            renderKVLSVG();
+            renderKVLControls();
+            updateKVLFromSliders();
+        }
+
+        function renderKVLSVG() {
+            const svg = document.getElementById('kvl-dynamic-svg');
+            let html = `
+                <path d="M 50 250 L 50 50 L 350 50 L 350 250 Z" fill="none" stroke="var(--wire-color)" stroke-width="18" stroke-linejoin="round"/>
+                <path id="kvl-el-dyn" class="electrons" d="M 50 250 L 50 50 L 350 50 L 350 250 Z" fill="none" stroke="var(--current-color)" stroke-width="10" stroke-linejoin="round"/>
+                <g transform="translate(50, 150)">
+                    <rect x="-25" y="-45" width="50" height="90" rx="10" fill="#161b22" stroke="#10b981" stroke-width="5"/>
+                    <rect x="-25" y="-45" width="50" height="90" fill="#10b981" opacity="0.6" rx="5"/>
+                    <text x="0" y="-18" fill="white" font-size="24" font-weight="bold" text-anchor="middle" dominant-baseline="middle">+</text>
+                    <text x="0" y="22" fill="white" font-size="34" font-weight="bold" text-anchor="middle" dominant-baseline="middle">-</text>
+                    <text x="35" y="8" fill="#10b981" font-size="22" font-weight="bold" text-anchor="start" id="kvl-svg-vsource">12.0 V</text>
+                </g>
+            `;
+
+            const pos = [
+                { x: 200, y: 50, rot: 0 },
+                { x: 350, y: 150, rot: 90 },
+                { x: 200, y: 250, rot: 0 }
+            ];
+
+            for(let i=0; i<kvlResCount; i++) {
+                let color = kvlColors[i];
+                let isVert = pos[i].rot === 90;
+                let rx = isVert ? -18 : -35;
+                let ry = isVert ? -35 : -18;
+                let rw = isVert ? 36 : 70;
+                let rh = isVert ? 70 : 36;
+
+                html += `
+                <g transform="translate(${pos[i].x}, ${pos[i].y})">
+                    <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="#161b22" stroke="${color}" stroke-width="5"/>
+                    <text x="${isVert ? 28 : 0}" y="${isVert ? -10 : -28}" fill="${color}" font-size="20" font-weight="bold" text-anchor="${isVert ? 'start' : 'middle'}">R${i+1}</text>
+                    <text x="${isVert ? 28 : 0}" y="${isVert ? 20 : 42}" fill="${color}" font-size="20" font-weight="bold" text-anchor="${isVert ? 'start' : 'middle'}" id="kvl-svg-v${i+1}">0.0 V</text>
+                </g>`;
+            }
+            svg.innerHTML = html;
+        }
+
+        function renderKVLControls() {
+            const container = document.getElementById('kvl-controls');
+            let sourceHtml = `
+            <div class="kcl-column" style="border: 2px solid rgba(16, 185, 129, 0.3);">
+                <div class="kcl-col-header color-in">แหล่งกำเนิด (Source)</div>
+                <div class="control-group color-in" style="width: 100%;">
+                    <div class="control-label">แรงดันรวม (V)</div>
+                    <div class="val-display" id="kvl-vsource-val">${kvlVSource} V</div>
+                    <div class="slider-wrapper">
+                        <button class="adjust-btn" onclick="adjustValue('kvl-vsource-slider', -1)">-</button>
+                        <input type="range" class="slider-in" id="kvl-vsource-slider" min="1" max="24" step="1" value="${kvlVSource}" oninput="updateKVLFromSliders()">
+                        <button class="adjust-btn" onclick="adjustValue('kvl-vsource-slider', 1)">+</button>
+                    </div>
+                </div>
+            </div>`;
+            let dropHtml = `
+            <div class="kcl-column" style="border: 2px solid rgba(245, 158, 11, 0.3);">
+                <div class="kcl-col-header" style="color: #f59e0b;">แรงดันตกคร่อม (Voltage Drops)</div>`;
+            for(let i=0; i<kvlResCount - 1; i++) {
+                dropHtml += `
+                <div class="control-group" style="width: 100%; color: ${kvlColors[i]};">
+                    <div class="control-label">V ที่ตกคร่อม R${i+1}</div>
+                    <div class="val-display" id="kvl-vdrop-val-${i}">${kvlVDrops[i]} V</div>
+                    <div class="slider-wrapper">
+                        <button class="adjust-btn" onclick="adjustValue('kvl-vdrop-slider-${i}', -1)">-</button>
+                        <input type="range" class="slider-out-${i}" id="kvl-vdrop-slider-${i}" min="0" max="${kvlVSource}" step="1" value="${kvlVDrops[i]}" oninput="updateKVLFromSliders()">
+                        <button class="adjust-btn" onclick="adjustValue('kvl-vdrop-slider-${i}', 1)">+</button>
+                    </div>
+                </div>`;
+            }
+            dropHtml += `
+                <div class="control-group result-board" style="width: 100%; border-width: 2px; padding: 5px; color: ${kvlColors[kvlResCount-1]}; border-color: ${kvlColors[kvlResCount-1]};">
+                    <div class="control-label">V ที่ตกคร่อม R${kvlResCount} (เหลือ)</div>
+                    <div class="val-display" id="kvl-vdrop-val-last" style="margin-bottom:0;">?.? V</div>
+                </div>
+            </div>`;
+            container.innerHTML = `<div class="kcl-controls-layout">${sourceHtml}<div class="kcl-divider">=</div>${dropHtml}</div>`;
+            document.getElementById('eq-v2').style.display = kvlResCount >= 2 ? 'inline' : 'none';
+            document.getElementById('eq-plus-2').style.display = kvlResCount >= 3 ? 'inline' : 'none';
+            document.getElementById('eq-v3').style.display = kvlResCount >= 3 ? 'inline' : 'none';
+        }
+
+        function updateKVLFromSliders() {
+            const vSourceSlider = document.getElementById('kvl-vsource-slider');
+            if(vSourceSlider) kvlVSource = parseInt(vSourceSlider.value);
+            document.getElementById('kvl-vsource-val').innerText = kvlVSource + " V";
+            const svgVSource = document.getElementById('kvl-svg-vsource');
+            if(svgVSource) svgVSource.textContent = kvlVSource.toFixed(1) + " V";
+
+            let sumUsed = 0;
+            for(let i=0; i<kvlResCount - 1; i++) {
+                const s = document.getElementById(`kvl-vdrop-slider-${i}`);
+                if(s) {
+                    let val = parseInt(s.value);
+                    let available = kvlVSource - sumUsed;
+                    if (val > available) { val = available; s.value = val; }
+                    s.max = kvlVSource; kvlVDrops[i] = val; sumUsed += val;
+                    document.getElementById(`kvl-vdrop-val-${i}`).innerText = val.toFixed(1) + " V";
+                    const svgV = document.getElementById(`kvl-svg-v${i+1}`);
+                    if(svgV) svgV.textContent = "V" + (i+1) + "=" + val.toFixed(1) + " V";
+                }
+            }
+
+            let lastV = Math.max(0, kvlVSource - sumUsed);
+            kvlVDrops[kvlResCount - 1] = lastV;
+            const lastValEl = document.getElementById('kvl-vdrop-val-last');
+            if(lastValEl) lastValEl.innerText = lastV.toFixed(1) + " V";
+            const svgVLast = document.getElementById(`kvl-svg-v${kvlResCount}`);
+            if(svgVLast) svgVLast.textContent = "V" + kvlResCount + "=" + lastV.toFixed(1) + " V";
+
+            let eqHtml = `<span class="color-in">+${kvlVSource} V</span> `;
+            for(let i=0; i<kvlResCount; i++) {
+                eqHtml += `<span style="color:white;">-</span> <span style="color:${kvlColors[i]}">${kvlVDrops[i]} V</span> `;
+            }
+            eqHtml += `<span style="color:white;">=</span> <span style="color:white;">0 V</span>`;
+            document.getElementById('kvl-eq-calc').innerHTML = eqHtml;
+
+            const elPathDyn = document.getElementById('kvl-el-dyn');
+            if(elPathDyn) {
+                elPathDyn.style.animationPlayState = 'running';
+                elPathDyn.style.animationDuration = Math.max(1, 15 - kvlVSource * 0.5) + 's';
+            }
+            renderKVLStaircase();
+        }
+
+        function renderKVLStaircase() {
+            const svg = document.getElementById('kvl-staircase');
+            const w = 300; const h = 280; 
+            const yMin = 240; 
+            const yMax = 30;  
+            const xPadding = 30;
+            const scaleMaxV = Math.max(kvlVSource, 12);
+            const scaleY = (v) => yMin - (v / scaleMaxV) * (yMin - yMax);
+            
+            let html = `
+                <line x1="${xPadding}" y1="${yMin}" x2="${w-10}" y2="${yMin}" stroke="var(--wire-color)" stroke-width="2"/>
+                <text x="${xPadding - 5}" y="${yMin+5}" fill="var(--text-muted)" font-size="12" text-anchor="end">0V</text>
+                <line x1="${xPadding}" y1="${scaleY(kvlVSource)}" x2="${w-10}" y2="${scaleY(kvlVSource)}" stroke="rgba(16, 185, 129, 0.2)" stroke-width="1" stroke-dasharray="4"/>
+                <text x="${xPadding - 5}" y="${scaleY(kvlVSource)+4}" fill="#10b981" font-size="12" text-anchor="end">${kvlVSource}V</text>
+            `;
+
+            let currentY = yMin; let currentX = xPadding + 10;
+            const stepW = (w - xPadding - 30) / (kvlResCount + 1);
+
+            const sourceY = scaleY(kvlVSource);
+            html += `<line x1="${currentX}" y1="${currentY}" x2="${currentX}" y2="${sourceY}" stroke="#10b981" stroke-width="4"/>`;
+            html += `<circle cx="${currentX}" cy="${sourceY}" r="4" fill="#10b981"/>`;
+            currentY = sourceY; currentX += stepW;
+            html += `<line x1="${currentX - stepW}" y1="${currentY}" x2="${currentX}" y2="${currentY}" stroke="#10b981" stroke-width="2"/>`;
+
+            let remainingV = kvlVSource;
+            for(let i=0; i<kvlResCount; i++) {
+                let dropV = kvlVDrops[i]; remainingV -= dropV; let nextY = scaleY(remainingV);
+                html += `<line x1="${currentX}" y1="${currentY}" x2="${currentX}" y2="${nextY}" stroke="${kvlColors[i]}" stroke-width="4"/>`;
+                html += `<circle cx="${currentX}" cy="${nextY}" r="4" fill="${kvlColors[i]}"/>`;
+                html += `<text x="${currentX + 5}" y="${(currentY + nextY)/2 + 4}" fill="${kvlColors[i]}" font-size="12" font-weight="bold">V${i+1}=${dropV}V</text>`;
+                currentY = nextY; currentX += stepW;
+                html += `<line x1="${currentX - stepW}" y1="${currentY}" x2="${currentX}" y2="${currentY}" stroke="var(--wire-color)" stroke-width="2"/>`;
+            }
+            svg.innerHTML = html;
+        }
+
+        // ================= PAGE 6: KVL Practice (Pop-up UI) =================
+        let p6CurrentScen = 1; 
+        let p6MaxScen = 1; 
+        let activeP6Var = ''; 
+        let p6Vals = { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0 }; 
+        let p6Solved = { a: false, b: false, c: false, d: false, e: false, f: false, g: false };
+        
+        const p6Config = {
+            a: { color: '#f59e0b', min: 0, max: 10, targetVal: 4.0 },
+            b: { color: '#10b981', min: 0, max: 15, targetVal: 12.0 },
+            c: { color: '#3b82f6', min: 0, max: 15, targetVal: 9.0 },
+            d: { color: '#ef4444', min: 0, max: 15, targetVal: 8.0 },
+            e: { color: '#a855f7', min: 0, max: 15, targetVal: 4.0 },
+            f: { color: '#ec4899', min: 0, max: 10, targetVal: 4.0 },
+            g: { color: '#f97316', min: 0, max: 10, targetVal: 3.0 }
+        };
+
+        function navP6(step) { 
+            let next = p6CurrentScen + step; 
+            if (next >= 1 && next <= Math.min(4, p6MaxScen)) initP6Scen(next); 
+        }
+
+        function initP6Scen(scen) {
+            p6CurrentScen = scen; closeP6Popover(); 
+            const nextLarge = document.getElementById('p6-next-btn-large'); 
+            if (nextLarge) nextLarge.style.display = 'none';
+            for(let i=1; i<=4; i++) document.getElementById(`p6-svg-${i}`).style.display = i===scen ? 'block' : 'none';
+            
+            const titles = ["วงจรอนุกรมเบื้องต้น", "วงจรลูปขนาน", "วงจรผสม 1", "วงจรผสม 2"];
+            document.getElementById('p6-scenario-title').innerText = `โจทย์ฝึกฝน KVL ${scen}/4: ${titles[scen-1]}`;
+            
+            document.getElementById('p6-prev').disabled = (scen === 1); 
+            document.getElementById('p6-next').disabled = (scen >= p6MaxScen); 
+            document.getElementById('p6-next').classList.remove('glow');
+        }
+
+        function openP6Popover(e, v) {
+            if(p6Solved[v]) return; 
+            activeP6Var = v; 
+            const pop = document.getElementById('p6-popover'); 
+            const conf = p6Config[v]; 
+            
+            document.getElementById('p6-pop-val').innerText = p6Vals[v].toFixed(1) + ' V';
+            document.getElementById('p6-pop-val').style.color = conf.color;
+            
+            const svgText = document.getElementById(`p6-${v}-text`);
+            if (svgText) {
+                svgText.textContent = `${v.toUpperCase()} = ${p6Vals[v].toFixed(1)} V`;
+            }
+            
+            const slider = document.getElementById('p6-pop-slider');
+            slider.min = conf.min;
+            slider.max = conf.max;
+            slider.value = p6Vals[v];
+            
+            setTimeout(() => { 
+                slider.style.background = `linear-gradient(90deg, #30363d, ${conf.color})`; 
+            }, 10);
+            
+            pop.style.display = 'flex'; 
+            pop.style.left = Math.max(150, Math.min(e.clientX, window.innerWidth - 150)) + 'px'; 
+            pop.style.top = Math.max(150, Math.min(e.clientY - 20, window.innerHeight - 200)) + 'px';
+        }
+
+        function closeP6Popover() { document.getElementById('p6-popover').style.display = 'none'; }
+
+        function adjustP6Pop(delta) { 
+            const s = document.getElementById('p6-pop-slider'); 
+            let v = Math.round((parseFloat(s.value) + delta) * 10) / 10; 
+            if (v >= s.min && v <= s.max) { s.value = v; updateP6Pop(); } 
+        }
+
+        function updateP6Pop() {
+            const val = parseFloat(document.getElementById('p6-pop-slider').value); 
+            p6Vals[activeP6Var] = val; 
+            document.getElementById('p6-pop-val').innerText = val.toFixed(1) + ' V';
+            
+            const svgText = document.getElementById(`p6-${activeP6Var}-text`);
+            if (svgText) {
+                svgText.textContent = `${activeP6Var.toUpperCase()} = ${val.toFixed(1)} V`;
+            }
+        }
+
+        function checkP6Popover() {
+            const conf = p6Config[activeP6Var]; 
+            if (Math.abs(p6Vals[activeP6Var] - conf.targetVal) < 0.05) { 
+                p6Solved[activeP6Var] = true; 
+                showToast("✅ ถูกต้อง! ผลรวมแรงดันตกคร่อมเท่ากับแรงดันของลูป", "success"); 
+                closeP6Popover(); 
+                
+                const box = document.getElementById(`p6-box-${activeP6Var}`);
+                if(box) box.classList.add('solved-box');
+                const text = document.getElementById(`p6-${activeP6Var}-text`);
+                if(text) text.classList.add('solved-text');
+                
+                let scComplete = (p6CurrentScen===1 && p6Solved.a) || 
+                                 (p6CurrentScen===2 && p6Solved.b && p6Solved.c) || 
+                                 (p6CurrentScen===3 && p6Solved.d && p6Solved.e) || 
+                                 (p6CurrentScen===4 && p6Solved.f && p6Solved.g);
+                                 
+                if (scComplete) {
+                    if (p6CurrentScen < 4) { 
+                        p6MaxScen = Math.max(p6MaxScen, p6CurrentScen + 1); 
+                        document.getElementById('p6-next').disabled = false; 
+                        document.getElementById('p6-next').classList.add('glow'); 
+                        const nextLarge = document.getElementById('p6-next-btn-large'); 
+                        if (nextLarge) { 
+                            nextLarge.style.display = 'inline-block'; 
+                            nextLarge.innerText = 'ทำข้อต่อไป ➔'; 
+                            nextLarge.onclick = () => navP6(1); 
+                        } 
+                    } else { 
+                        isPage6FullyUnlocked = true; 
+                        updateDots(); 
+                        showToast("🎉 ยินดีด้วย! คุณผ่านบทเรียนทั้งหมดแล้ว!", "success");
+                    }
+                }
+            } else { 
+                showToast("❌ ยังไม่ถูกต้อง ลองไล่ลูป (Loop) ดูดีๆ นะ ΣV = 0", "error"); 
+            }
+        }
+
+        // Initialize App
+        updateScenarioPhysics();
+        updatePage2Display();
+        initKCL();
+        initP4Scen(1);
+        initKVL();
+        initP6Scen(1);
+        updateDots();
+    </script>
+</body>
+</html>
