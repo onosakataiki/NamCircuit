@@ -410,24 +410,24 @@
             <p class="title-badge" style="margin-top: 5px;">ทบทวนสมการแรงดันไฟฟ้า (V)</p>
             
             <div class="mission-box" style="display: flex; align-items: center; justify-content: center; max-width: 900px; margin: 15px auto;">
-                <div style="font-size: 1.3rem; text-align: center; margin-bottom: 10px;">คำสั่ง: ลากตัวแปร <b>V, I, R</b> ไปจัดเรียงในสมการให้ถูกต้อง</div>
+                <div style="font-size: 1.3rem; text-align: center; margin-bottom: 10px;">คำสั่ง: ลากตัวแปร <b>V, I, R</b> ไปจัดเรียงในสมการให้ถูกต้อง (แตะเลือกและแตะวางได้เช่นกัน)</div>
                 
                 <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; width: 100%;">
                     <!-- ซ้าย: ตัวแปร -->
                     <div class="draggables" style="background: rgba(255,255,255,0.05); padding: 15px 25px; border-radius: 20px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);">
-                        <div class="drag-item drag-v" draggable="true" ondragstart="dragStart(event, 'V')" onclick="selectItem(this, 'V')" data-type="V">V</div>
-                        <div class="drag-item drag-i" draggable="true" ondragstart="dragStart(event, 'I')" onclick="selectItem(this, 'I')" data-type="I">I</div>
-                        <div class="drag-item drag-r" draggable="true" ondragstart="dragStart(event, 'R')" onclick="selectItem(this, 'R')" data-type="R">R</div>
+                        <div class="drag-item drag-v" data-type="V">V</div>
+                        <div class="drag-item drag-i" data-type="I">I</div>
+                        <div class="drag-item drag-r" data-type="R">R</div>
                     </div>
                     <!-- ลูกศรชี้ -->
                     <div style="font-size: 2.5rem; color: rgba(255,255,255,0.3);">➔</div>
                     <!-- ขวา: สมการ -->
                     <div class="equation-builder" style="margin: 0; background: rgba(255,255,255,0.05); padding: 15px 25px; border-radius: 20px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.3);">
-                        <div class="drop-zone" data-expected="V" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                        <div class="drop-zone" data-expected="V" onclick="clickDropZone(this)"></div>
                         <span style="margin:0 10px;">=</span>
-                        <div class="drop-zone" data-expected="I,R" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                        <div class="drop-zone" data-expected="I,R" onclick="clickDropZone(this)"></div>
                         <span style="margin:0 10px;">×</span>
-                        <div class="drop-zone" data-expected="I,R" ondragover="allowDrop(event)" ondrop="drop(event, this)" onclick="clickDropZone(this)"></div>
+                        <div class="drop-zone" data-expected="I,R" onclick="clickDropZone(this)"></div>
                     </div>
                 </div>
             </div>
@@ -521,7 +521,6 @@
                     <text x="310" y="180" fill="var(--resistance-color)" font-size="18" font-weight="bold" text-anchor="middle">R=5Ω</text>
                 </g>
                 
-                <!-- Disable hover-scale for old page 2 to prevent jittering -->
                 <g transform="translate(250, 110)">
                     <rect x="-85" y="-22" width="170" height="40" rx="10" fill="var(--bg-color)" stroke="var(--current-color)" stroke-width="3"/>
                     <text id="p2-ix-text" x="0" y="5" fill="var(--current-color)" font-size="22" font-weight="800" text-anchor="middle">I ตรงกลาง = ? A</text>
@@ -1129,9 +1128,15 @@
             updateDots();
         }
 
-        // ================= PAGE 1: DRAG & DROP LOGIC =================
+        // ================= PAGE 1: UNIFIED DRAG & DROP LOGIC (Pointer Events) =================
         let expectedFills = 3; let currentFills = 0; let selectedType = null;
-        function selectItem(el, type) { document.querySelectorAll('.drag-item').forEach(e => e.classList.remove('selected')); el.classList.add('selected'); selectedType = type; }
+        
+        function selectItem(el, type) { 
+            document.querySelectorAll('.drag-item').forEach(e => e.classList.remove('selected')); 
+            el.classList.add('selected'); 
+            selectedType = type; 
+        }
+
         function clickDropZone(zone) {
             if (!selectedType || zone.classList.contains('filled')) return;
             let expectedArr = zone.dataset.expected.split(',');
@@ -1156,60 +1161,75 @@
                 setTimeout(() => zone.classList.remove('error'), 300); 
             }
         }
-        function dragStart(e, type) { e.dataTransfer.setData('text/plain', type); selectedType = type; }
-        function allowDrop(e) { e.preventDefault(); }
-        function drop(e, zone) { e.preventDefault(); selectedType = e.dataTransfer.getData('text/plain'); clickDropZone(zone); }
-        
-        // Touch Drag & Drop Polyfill สำหรับมือถือและ iPad
-        function initTouchDrag() {
+
+        // Unified Drag & Drop for Mouse and Touch Devices
+        function initUnifiedDrag() {
             const dragItems = document.querySelectorAll('.drag-item');
             let dragClone = null;
-            let startX = 0, startY = 0;
+            let offsetX = 0, offsetY = 0;
+            let isDragging = false;
 
             dragItems.forEach(item => {
-                item.addEventListener('touchstart', function(e) {
-                    const touch = e.touches[0];
+                item.addEventListener('pointerdown', function(e) {
+                    // อนุญาตเฉพาะคลิกซ้าย หรือ touch เท่านั้น
+                    if (e.button !== 0 && e.pointerType === 'mouse') return;
+                    e.preventDefault(); // ป้องกันพฤติกรรมพื้นฐาน (เช่น การพยายามลากข้อความ)
+                    isDragging = false;
+                    
                     selectedType = this.dataset.type;
                     selectItem(this, selectedType);
 
-                    // สร้างกล่องลอยขณะลาก
+                    const rect = this.getBoundingClientRect();
+                    offsetX = e.clientX - rect.left;
+                    offsetY = e.clientY - rect.top;
+
+                    // สร้างกล่องตัวแทนจำลองขณะที่กำลังลาก
                     dragClone = this.cloneNode(true);
                     dragClone.style.position = 'fixed';
                     dragClone.style.zIndex = '9999';
                     dragClone.style.opacity = '0.9';
-                    dragClone.style.pointerEvents = 'none';
+                    dragClone.style.pointerEvents = 'none'; // ให้ทะลุผ่านเพื่อเช็ค Drop zone ด้านล่างได้
                     dragClone.style.transform = 'scale(1.1)';
                     dragClone.style.margin = '0';
-                    
-                    const rect = this.getBoundingClientRect();
-                    startX = touch.clientX - rect.left;
-                    startY = touch.clientY - rect.top;
-                    
                     dragClone.style.left = rect.left + 'px';
                     dragClone.style.top = rect.top + 'px';
                     
                     document.body.appendChild(dragClone);
-                }, {passive: false});
+                    
+                    // สั่งให้ Pointer ผูกติดกับไอเทมนั้นแม้จะลากออกไปนอกขอบเขต
+                    this.setPointerCapture(e.pointerId);
+                });
 
-                item.addEventListener('touchmove', function(e) {
+                item.addEventListener('pointermove', function(e) {
                     if (!dragClone) return;
-                    e.preventDefault(); // ป้องกันจอเลื่อนขณะลาก
-                    const touch = e.touches[0];
-                    dragClone.style.left = (touch.clientX - startX) + 'px';
-                    dragClone.style.top = (touch.clientY - startY) + 'px';
-                }, {passive: false});
+                    isDragging = true;
+                    e.preventDefault();
+                    dragClone.style.left = (e.clientX - offsetX) + 'px';
+                    dragClone.style.top = (e.clientY - offsetY) + 'px';
+                });
 
-                item.addEventListener('touchend', function(e) {
+                item.addEventListener('pointerup', function(e) {
                     if (!dragClone) return;
-                    const touch = e.changedTouches[0];
-                    // หาจุด drop zone ที่นิ้วปล่อย
-                    const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+                    this.releasePointerCapture(e.pointerId);
+                    
+                    // ตรวจสอบว่าถูกปล่อยบนกล่องรับข้อมูล (Drop Zone) หรือไม่
+                    if (isDragging) {
+                        const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                        if (dropTarget && dropTarget.classList.contains('drop-zone')) {
+                            clickDropZone(dropTarget);
+                        }
+                    }
                     
                     dragClone.remove();
                     dragClone = null;
+                });
 
-                    if (dropTarget && dropTarget.classList.contains('drop-zone')) {
-                        clickDropZone(dropTarget);
+                item.addEventListener('pointercancel', function(e) {
+                    if (dragClone) {
+                        this.releasePointerCapture(e.pointerId);
+                        dragClone.remove();
+                        dragClone = null;
+                        isDragging = false;
                     }
                 });
             });
@@ -1654,7 +1674,7 @@
         initKVL();
         initP6Scen(1);
         updateDots();
-        initTouchDrag(); // เปิดใช้งานระบบลากด้วยนิ้ว
+        initUnifiedDrag(); // เปิดใช้งานระบบลากแบบใหม่ (Pointer Events) ครอบคลุมทั้ง iPad/Mobile/Desktop
     </script>
 </body>
 </html>
