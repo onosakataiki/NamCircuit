@@ -180,11 +180,12 @@
             width: 55px; height: 55px; border-radius: 15px;
             display: flex; justify-content: center; align-items: center;
             font-size: 2rem; font-weight: 800; cursor: grab;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4); transition: all 0.2s; user-select: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4); transition: all 0.2s; 
+            user-select: none;
             touch-action: none; /* ป้องกันจอเลื่อนเวลาลากบนมือถือ/iPad */
+            -webkit-user-select: none;
         }
         
-        .drag-item:active { cursor: grabbing; transform: scale(0.9); }
         .drag-item.selected { outline: 4px solid white; outline-offset: 2px; transform: scale(1.1); }
         
         /* อัปเดตสีตัวแปรให้ตรงกับ Theme ภายใน SVG */
@@ -1128,7 +1129,7 @@
             updateDots();
         }
 
-        // ================= PAGE 1: UNIFIED DRAG & DROP LOGIC (Pointer Events) =================
+        // ================= PAGE 1: UNIFIED DRAG & DROP LOGIC (Touch & Mouse) =================
         let expectedFills = 3; let currentFills = 0; let selectedType = null;
         
         function selectItem(el, type) { 
@@ -1143,7 +1144,6 @@
             let alreadyUsed = Array.from(document.querySelectorAll('.drop-zone.filled')).some(z => z.innerText === selectedType);
             if (expectedArr.includes(selectedType) && !alreadyUsed) {
                 zone.innerText = selectedType; 
-                // ใช้ drag- แทน bg- เพื่อให้กล่องที่หล่นรักษาสีขอบและตัวอักษรไว้สวยงาม
                 zone.className = `drop-zone filled drag-${selectedType.toLowerCase()}`; 
                 currentFills++; 
                 selectedType = null; 
@@ -1162,7 +1162,6 @@
             }
         }
 
-        // Unified Drag & Drop for Mouse and Touch Devices
         function initUnifiedDrag() {
             const dragItems = document.querySelectorAll('.drag-item');
             let dragClone = null;
@@ -1170,66 +1169,75 @@
             let isDragging = false;
 
             dragItems.forEach(item => {
+                // ใช้ Pointer Events (รองรับทั้ง Mouse, Touch, Pen อย่างสมบูรณ์แบบ)
                 item.addEventListener('pointerdown', function(e) {
-                    // อนุญาตเฉพาะคลิกซ้าย หรือ touch เท่านั้น
-                    if (e.button !== 0 && e.pointerType === 'mouse') return;
-                    e.preventDefault(); // ป้องกันพฤติกรรมพื้นฐาน (เช่น การพยายามลากข้อความ)
-                    isDragging = false;
+                    if (e.pointerType === 'mouse' && e.button !== 0) return; // เฉพาะคลิกซ้าย
+                    e.preventDefault(); 
                     
+                    isDragging = true;
                     selectedType = this.dataset.type;
-                    selectItem(this, selectedType);
+                    
+                    // อัปเดต UI ว่ากำลังเลือกตัวแปรนี้
+                    document.querySelectorAll('.drag-item').forEach(el => el.classList.remove('selected'));
+                    this.classList.add('selected');
 
+                    // คำนวณพิกัดเพื่อจำลองกล่องให้พอดีกับนิ้ว
                     const rect = this.getBoundingClientRect();
                     offsetX = e.clientX - rect.left;
                     offsetY = e.clientY - rect.top;
 
-                    // สร้างกล่องตัวแทนจำลองขณะที่กำลังลาก
+                    // สร้างร่างโคลน (ลอยเหนือหน้าจอ)
                     dragClone = this.cloneNode(true);
                     dragClone.style.position = 'fixed';
                     dragClone.style.zIndex = '9999';
                     dragClone.style.opacity = '0.9';
-                    dragClone.style.pointerEvents = 'none'; // ให้ทะลุผ่านเพื่อเช็ค Drop zone ด้านล่างได้
-                    dragClone.style.transform = 'scale(1.1)';
+                    dragClone.style.pointerEvents = 'none'; // สำคัญ: เพื่อให้ลากผ่านทะลุไปแตะกล่องรับได้
                     dragClone.style.margin = '0';
+                    dragClone.style.width = rect.width + 'px';
+                    dragClone.style.height = rect.height + 'px';
                     dragClone.style.left = rect.left + 'px';
                     dragClone.style.top = rect.top + 'px';
+                    dragClone.style.transform = 'scale(1.15)';
+                    dragClone.style.boxShadow = '0 15px 30px rgba(0,0,0,0.6)';
+                    dragClone.style.transition = 'none';
                     
                     document.body.appendChild(dragClone);
                     
-                    // สั่งให้ Pointer ผูกติดกับไอเทมนั้นแม้จะลากออกไปนอกขอบเขต
+                    // บังคับให้การลากเกาะติดที่ไอเทมนี้เท่านั้น (ลากเร็วแค่ไหนก็ไม่หลุด)
                     this.setPointerCapture(e.pointerId);
                 });
 
                 item.addEventListener('pointermove', function(e) {
-                    if (!dragClone) return;
-                    isDragging = true;
-                    e.preventDefault();
+                    if (!isDragging || !dragClone) return;
+                    e.preventDefault(); // ป้องกันการเลื่อนหน้าจอ
                     dragClone.style.left = (e.clientX - offsetX) + 'px';
                     dragClone.style.top = (e.clientY - offsetY) + 'px';
                 });
 
                 item.addEventListener('pointerup', function(e) {
-                    if (!dragClone) return;
-                    this.releasePointerCapture(e.pointerId);
+                    if (!isDragging) return;
+                    isDragging = false;
+                    this.releasePointerCapture(e.pointerId); // ปลดการล็อก
                     
-                    // ตรวจสอบว่าถูกปล่อยบนกล่องรับข้อมูล (Drop Zone) หรือไม่
-                    if (isDragging) {
+                    if (dragClone) {
+                        // ค้นหา element ที่อยู่ภายใต้ตำแหน่งที่ปล่อยนิ้ว
                         const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+                        dragClone.remove();
+                        dragClone = null;
+
                         if (dropTarget && dropTarget.classList.contains('drop-zone')) {
                             clickDropZone(dropTarget);
                         }
                     }
-                    
-                    dragClone.remove();
-                    dragClone = null;
                 });
 
                 item.addEventListener('pointercancel', function(e) {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    this.releasePointerCapture(e.pointerId);
                     if (dragClone) {
-                        this.releasePointerCapture(e.pointerId);
                         dragClone.remove();
                         dragClone = null;
-                        isDragging = false;
                     }
                 });
             });
